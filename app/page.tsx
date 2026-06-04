@@ -18,9 +18,38 @@ import CheckoutContactAndShippingScreen, { type CheckoutContactAndShippingReport
 import CheckoutReviewScreen, { type CheckoutReviewReport } from "@/components/checkout-review-screen"
 import SecurePaymentGatewayHandoffScreen, { type SecurePaymentGatewayHandoffReport } from "@/components/secure-payment-gateway-handoff-screen"
 import OrderConfirmationAndPaymentResultScreen, { type OrderPaymentResultReport } from "@/components/order-confirmation-and-payment-result-screen"
+import HomeDashboardScreen, { type HomeDashboardReport } from "@/components/home-dashboard-screen"
+import ProfileSwitcherAndManagementScreen, { type ManagedProfileSummary, type ProfileSwitcherAndManagementReport } from "@/components/profile-switcher-and-management-screen"
+import GuestIngredientScannerEntryScreen, { type GuestIngredientScannerEntryReport } from "@/components/guest-ingredient-scanner-entry-screen"
+import IngredientInputReviewScreen, {
+  type IngredientInputReviewReport,
+  type IngredientInputReviewSubmission,
+  type IngredientInputSource,
+} from "@/components/ingredient-input-review-screen"
 
-type Screen = "welcome" | "privacy-consent" | "profile-setup" | "image-source" | "camera" | "image-review" | "analysis" | "results-summary" | "full-report" | "routine" | "store" | "cart" | "product-detail" | "checkout-details" | "checkout-review" | "payment-gateway" | "order-confirmation"
+type Screen = "welcome" | "privacy-consent" | "profile-setup" | "image-source" | "camera" | "image-review" | "analysis" | "results-summary" | "full-report" | "routine" | "store" | "cart" | "product-detail" | "checkout-details" | "checkout-review" | "payment-gateway" | "order-confirmation" | "dashboard" | "profile-management" | "ingredient-scanner-entry" | "ingredient-input-review"
 type ProductDetailSourceScreen = "routine" | "store" | "cart"
+type ManagedProfileId = "profile-001" | "profile-002"
+type IngredientScannerEntryBackScreen = "welcome" | "dashboard"
+type ProfileManagementBackScreen = "dashboard" | "image-source" | "image-review" | "ingredient-scanner-entry" | "ingredient-input-review"
+type ProfileSetupBackScreen = "privacy-consent" | "dashboard" | "profile-management"
+type ImageSourceBackScreen = "profile-setup" | "dashboard" | "profile-management"
+type RoutineBackScreen = "full-report" | "results-summary" | "dashboard"
+type StoreBackScreen = "routine" | "dashboard"
+
+interface DemoIngredientInputDraft {
+  draftId: string
+  source: IngredientInputSource
+  sourceLabel: string
+  ingredientText: string
+  selectedProfileId: ManagedProfileId | null
+  image?: {
+    imageUrl?: string
+    imageAlt?: string
+    sourceLabel?: string
+  }
+  extractionNoticeLabel?: string
+}
 
 const sampleCountries = [
   { code: "AU", name: "Australia" },
@@ -35,16 +64,52 @@ const sampleCountries = [
   { code: "US", name: "United States" },
 ]
 
+const sampleIngredientDraftIds = {
+  "camera-photo": "ingredient-draft-camera-001",
+  "chosen-photo": "ingredient-draft-picker-001",
+  "manual-entry": "ingredient-draft-manual-001",
+} satisfies Record<IngredientInputSource, string>
+
+const sampleIngredientSourceLabels = {
+  "camera-photo": "Demo host camera-label review draft",
+  "chosen-photo": "Demo host selected-label review draft",
+  "manual-entry": "Manual ingredient-text draft",
+} satisfies Record<IngredientInputSource, string>
+
 // Sample image for demo purposes
 const SAMPLE_IMAGE_URL = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&h=800&fit=crop&crop=face"
 
 export default function Page() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("welcome")
   const [profileName, setProfileName] = useState("Alex")
+  const [activeManagedProfileId, setActiveManagedProfileId] =
+    useState<ManagedProfileId>("profile-001")
+  const [managedProfileDisplayNames, setManagedProfileDisplayNames] = useState<
+    Record<ManagedProfileId, string>
+  >({
+    "profile-001": "Alex",
+    "profile-002": "Maya",
+  })
   const [capturedImageUrl, setCapturedImageUrl] = useState<string | null>(null)
   const [imageSource, setImageSource] = useState<"camera" | "upload">("camera")
   const [selectedCheckoutShippingOptionId, setSelectedCheckoutShippingOptionId] = useState("shipopt-001")
   const [checkoutDetailsSubmission, setCheckoutDetailsSubmission] = useState<CheckoutContactAndShippingSubmission | null>(null)
+  const [profileSetupBackScreen, setProfileSetupBackScreen] =
+    useState<ProfileSetupBackScreen>("privacy-consent")
+  const [imageSourceBackScreen, setImageSourceBackScreen] =
+    useState<ImageSourceBackScreen>("profile-setup")
+  const [profileManagementBackScreen, setProfileManagementBackScreen] =
+    useState<ProfileManagementBackScreen>("dashboard")
+  const [ingredientScannerEntryBackScreen, setIngredientScannerEntryBackScreen] =
+    useState<IngredientScannerEntryBackScreen>("welcome")
+  const [ingredientScannerSelectedProfileId, setIngredientScannerSelectedProfileId] =
+    useState<ManagedProfileId | null>(null)
+  const [ingredientInputDraft, setIngredientInputDraft] =
+    useState<DemoIngredientInputDraft | null>(null)
+  const [routineBackScreen, setRoutineBackScreen] =
+    useState<RoutineBackScreen>("full-report")
+  const [storeBackScreen, setStoreBackScreen] =
+    useState<StoreBackScreen>("routine")
   const [productDetailContext, setProductDetailContext] = useState<{
     productId: string
     sourceScreen: ProductDetailSourceScreen
@@ -59,6 +124,43 @@ export default function Page() {
       sourceScreen,
     })
     setCurrentScreen("product-detail")
+  }
+
+  function openIngredientInputReview(
+    source: IngredientInputSource,
+    submission: {
+      profileId?: string
+    },
+  ) {
+    const selectedProfileId =
+      submission.profileId === "profile-001" ||
+      submission.profileId === "profile-002"
+        ? submission.profileId
+        : null
+
+    setIngredientInputDraft({
+      draftId: sampleIngredientDraftIds[source],
+      source,
+      sourceLabel: sampleIngredientSourceLabels[source],
+      ingredientText:
+        source === "manual-entry"
+          ? ""
+          : "Aqua, Glycerin, Niacinamide",
+      selectedProfileId,
+      extractionNoticeLabel:
+        source === "manual-entry"
+          ? "Enter the ingredient text manually before continuing."
+          : "Demo host-supplied review text only. No image-text or extraction adapter is connected.",
+    })
+
+    setCurrentScreen("ingredient-input-review")
+  }
+
+  function returnToIngredientScannerEntry() {
+    setIngredientScannerSelectedProfileId(
+      ingredientInputDraft?.selectedProfileId ?? null,
+    )
+    setCurrentScreen("ingredient-scanner-entry")
   }
   
   // Analysis state
@@ -487,6 +589,151 @@ export default function Page() {
         description: "Apply a hydrating sheet mask or cream mask to boost moisture levels, especially helpful for the drier areas of your face.",
       },
     ],
+  }
+
+  const sampleManagedProfiles: Array<
+    ManagedProfileSummary & { profileId: ManagedProfileId }
+  > = [
+    {
+      profileId: "profile-001",
+      displayName: managedProfileDisplayNames["profile-001"],
+      isActive: activeManagedProfileId === "profile-001",
+      syncState: "local-only",
+      syncLabel: "Saved locally on this device",
+      supporting: "Primary local skincare profile",
+      latestSnapshotLabel: sampleReport.generatedAtLabel,
+      canSelect: true,
+      canEdit: true,
+      canDelete: false,
+      deleteBlockLabel: "Keep one active profile",
+    },
+    {
+      profileId: "profile-002",
+      displayName: managedProfileDisplayNames["profile-002"],
+      isActive: activeManagedProfileId === "profile-002",
+      syncState: "local-only",
+      syncLabel: "Saved locally on this device",
+      supporting: "Second local skincare profile",
+      latestSnapshotLabel: "No snapshot saved yet",
+      canSelect: true,
+      canEdit: true,
+      canDelete: true,
+    },
+  ]
+
+  const sampleProfileManagementReport: ProfileSwitcherAndManagementReport = {
+    profiles: sampleManagedProfiles,
+    helperLabel: "Profiles stay local on this device unless you choose to sync them.",
+    profileLimitLabel: "Demo host limit: 2 of 5 profiles used.",
+    syncHelperLabel: "Optional sync settings route is not connected in this demo.",
+  }
+
+  const scannerProfileMatches = ingredientScannerSelectedProfileId
+    ? sampleManagedProfiles.filter(
+        (profile) => profile.profileId === ingredientScannerSelectedProfileId,
+      )
+    : []
+
+  const scannerSelectedProfile =
+    scannerProfileMatches.length === 1 ? scannerProfileMatches[0] : null
+
+  const sampleIngredientScannerEntryReport: GuestIngredientScannerEntryReport = {
+    selectedProfile: scannerSelectedProfile
+      ? {
+          profileId: scannerSelectedProfile.profileId,
+          displayName: scannerSelectedProfile.displayName,
+          contextLabel: "Optional local profile context supplied by the demo host.",
+        }
+      : undefined,
+    helperLabel: "Choose how to provide the ingredient list. The next review step remains host-owned.",
+    privacyLabel: "You will review the ingredient text before guidance is prepared.",
+    photoTips: [
+      "Keep the ingredient list fully visible.",
+      "Use even lighting and avoid glare.",
+    ],
+  }
+
+  const ingredientInputProfileMatches = ingredientInputDraft?.selectedProfileId
+    ? sampleManagedProfiles.filter(
+        (profile) => profile.profileId === ingredientInputDraft.selectedProfileId,
+      )
+    : []
+
+  const ingredientInputSelectedProfile =
+    ingredientInputProfileMatches.length === 1
+      ? ingredientInputProfileMatches[0]
+      : null
+
+  const sampleIngredientInputReviewReport: IngredientInputReviewReport | null =
+    ingredientInputDraft
+      ? {
+          draftId: ingredientInputDraft.draftId,
+          source: ingredientInputDraft.source,
+          sourceLabel: ingredientInputDraft.sourceLabel,
+          ingredientText: ingredientInputDraft.ingredientText,
+          selectedProfile: ingredientInputSelectedProfile
+            ? {
+                profileId: ingredientInputSelectedProfile.profileId,
+                displayName: ingredientInputSelectedProfile.displayName,
+                contextLabel:
+                  "Optional local profile context supplied by the demo host.",
+              }
+            : undefined,
+          image: ingredientInputDraft.image,
+          helperLabel:
+            "Review and correct the host-controlled draft before continuing.",
+          privacyLabel:
+            "Guidance is not prepared until you explicitly continue.",
+          extractionNoticeLabel: ingredientInputDraft.extractionNoticeLabel,
+        }
+      : null
+
+  const activeManagedProfile =
+    sampleManagedProfiles.find(
+      (profile) => profile.profileId === activeManagedProfileId,
+    ) ?? null
+
+  const activeManagedProfileDisplayName =
+    activeManagedProfile?.displayName ?? profileName
+
+  // Demo-only host/controller fixture for returning-user dashboard routing.
+  const sampleDashboardReport: HomeDashboardReport = {
+    profile: {
+      profileId: activeManagedProfileId,
+      displayName: activeManagedProfileDisplayName,
+      syncState: "local-only",
+      syncLabel: "Saved locally on this device",
+    },
+    greetingLabel: "Good to see you again",
+    latestSnapshot: {
+      reportId: sampleReport.reportId,
+      capturedAtLabel: sampleReport.generatedAtLabel,
+      categoryLabel: sampleReport.categoryLabel,
+      comparisonLabel: sampleReport.comparison.label,
+      imageUrl: capturedImageUrl ?? SAMPLE_IMAGE_URL,
+      imageAlt: `${activeManagedProfileDisplayName} skincare snapshot`,
+      scoreLabel: `${sampleReport.score} / 100`,
+      saveLabel: sampleReport.saveLabel,
+    },
+    routine: {
+      routineId: sampleRoutineReport.routineId,
+      title: "Your personalised routine",
+      supporting:
+        "A simple morning and evening plan based on your latest snapshot.",
+      updatedAtLabel: sampleRoutineReport.generatedAtLabel,
+      morningSummaryLabel: `${sampleRoutineReport.morning.steps.length} steps`,
+      eveningSummaryLabel: `${sampleRoutineReport.evening.steps.length} steps`,
+    },
+    recentOrder: {
+      orderId: "order-001",
+      orderReferenceLabel: "DL-2024-001234",
+      statusLabel: "Order details route not connected yet",
+      supporting: "Your first-party DermaLens order summary remains readable.",
+    },
+    environment: {
+      uvLabel: "UV details supplied when the host feature flag is enabled",
+      aqiLabel: "AQI details supplied when the host feature flag is enabled",
+    },
   }
 
   // Sample store collection data
@@ -1014,7 +1261,7 @@ export default function Page() {
           tone: "neutral",
         },
       ],
-      fullIngredientList: ["Aqua", "Homosalate", "Octocrylene", "Glycerin", "Tocopherol", "Silica"],
+      fullIngredientList: ["Aqua", "Homosalate", "Avobenzone", "Glycerin", "Tocopherol", "Silica"],
       badges: [
         {
           id: "spf-badge-1",
@@ -1528,6 +1775,7 @@ export default function Page() {
           console.log("Viewing order:", orderId)
         }}
         onContinueShopping={() => {
+          setStoreBackScreen("routine")
           setCurrentScreen("store")
         }}
         onBackToReview={() => {
@@ -1697,6 +1945,220 @@ export default function Page() {
     )
   }
 
+  // Ingredient Input Review Screen
+  if (currentScreen === "ingredient-input-review") {
+    return (
+      <IngredientInputReviewScreen
+        state={sampleIngredientInputReviewReport ? "ready" : "error"}
+        report={sampleIngredientInputReviewReport}
+        isOffline={false}
+        canGoBack={true}
+        canChangeMethod={true}
+        canChangeProfile={true}
+        canEditIngredientText={true}
+        canContinue={true}
+        onBack={returnToIngredientScannerEntry}
+        onChangeMethod={returnToIngredientScannerEntry}
+        onIngredientTextChange={(ingredientText) => {
+          setIngredientInputDraft((current) =>
+            current
+              ? {
+                  ...current,
+                  ingredientText,
+                }
+              : current,
+          )
+        }}
+        onChangeProfile={() => {
+          setProfileManagementBackScreen("ingredient-input-review")
+          setCurrentScreen("profile-management")
+        }}
+        onContinue={(submission: IngredientInputReviewSubmission) => {
+          console.log(
+            "Submitting reviewed ingredient draft for future guidance route:",
+            submission,
+          )
+        }}
+        onRetryLoad={() => {
+          console.log("Retrying ingredient input review load...")
+        }}
+      />
+    )
+  }
+
+  // Guest Ingredient Scanner Entry Screen
+  if (currentScreen === "ingredient-scanner-entry") {
+    return (
+      <GuestIngredientScannerEntryScreen
+        state="ready"
+        report={sampleIngredientScannerEntryReport}
+        isOffline={false}
+        canGoBack={true}
+        canTakePhoto={true}
+        isTakePhotoAvailableOffline={false}
+        canChoosePhoto={true}
+        isChoosePhotoAvailableOffline={false}
+        canEnterIngredientsManually={true}
+        isManualEntryAvailableOffline={true}
+        canChangeProfile={true}
+        canContinueWithoutProfile={true}
+        onBack={() => {
+          setCurrentScreen(ingredientScannerEntryBackScreen)
+        }}
+        onTakePhoto={(submission) => {
+          console.log("Opening ingredient scanner camera route:", submission)
+          openIngredientInputReview("camera-photo", submission)
+        }}
+        onChoosePhoto={(submission) => {
+          console.log("Opening ingredient scanner picker route:", submission)
+          openIngredientInputReview("chosen-photo", submission)
+        }}
+        onEnterIngredientsManually={(submission) => {
+          console.log("Opening ingredient scanner manual-entry route:", submission)
+          openIngredientInputReview("manual-entry", submission)
+        }}
+        onChangeProfile={() => {
+          setProfileManagementBackScreen("ingredient-scanner-entry")
+          setCurrentScreen("profile-management")
+        }}
+        onContinueWithoutProfile={() => {
+          console.log("Continuing ingredient scanner without profile...")
+          setIngredientScannerSelectedProfileId(null)
+        }}
+        onRetryLoad={() => {
+          console.log("Retrying ingredient scanner entry load...")
+        }}
+      />
+    )
+  }
+
+  // Profile Switcher and Management Screen
+  if (currentScreen === "profile-management") {
+    return (
+      <ProfileSwitcherAndManagementScreen
+        state="ready"
+        report={sampleProfileManagementReport}
+        isOffline={false}
+        canGoBack={true}
+        canAddProfile={true}
+        canOpenSyncSettings={true}
+        canSelectProfiles={true}
+        canEditProfiles={true}
+        canDeleteProfiles={true}
+        onBack={() => {
+          setCurrentScreen(profileManagementBackScreen)
+        }}
+        onSelectProfile={(profileId) => {
+          const matchingProfiles = sampleManagedProfiles.filter(
+            (profile) => profile.profileId === profileId,
+          )
+
+          if (matchingProfiles.length !== 1) {
+            console.log("Profile selection failed closed:", profileId)
+            return
+          }
+
+          const selectedProfile = matchingProfiles[0]
+          console.log("Selecting profile:", profileId)
+          setActiveManagedProfileId(selectedProfile.profileId)
+          setProfileName(selectedProfile.displayName)
+          if (profileManagementBackScreen === "ingredient-scanner-entry") {
+            setIngredientScannerSelectedProfileId(selectedProfile.profileId)
+          }
+          if (profileManagementBackScreen === "ingredient-input-review") {
+            setIngredientInputDraft((current) =>
+              current
+                ? {
+                    ...current,
+                    selectedProfileId: selectedProfile.profileId,
+                  }
+                : current,
+            )
+          }
+          setCurrentScreen(profileManagementBackScreen)
+        }}
+        onAddProfile={() => {
+          setProfileSetupBackScreen("profile-management")
+          setCurrentScreen("profile-setup")
+        }}
+        onEditProfile={(profileId) => {
+          console.log("Editing profile:", profileId)
+        }}
+        onOpenSyncSettings={() => {
+          console.log("Opening profile sync settings...")
+        }}
+        onDeleteProfile={(profileId) => {
+          console.log("Deleting profile:", profileId)
+        }}
+        onRetryLoad={() => {
+          console.log("Retrying profile management load...")
+        }}
+      />
+    )
+  }
+
+  // Home Dashboard Screen
+  if (currentScreen === "dashboard") {
+    return (
+      <HomeDashboardScreen
+        state="ready"
+        report={sampleDashboardReport}
+        isOffline={false}
+        showEnvironmentalModule={false}
+        canStartAnalysis={true}
+        canChangeProfile={true}
+        canOpenLatestReport={true}
+        canOpenRoutine={true}
+        canOpenGuestScanner={true}
+        isGuestScannerAvailableOffline={false}
+        canOpenProgress={false}
+        canOpenOrders={false}
+        canOpenStore={true}
+        canOpenRecentOrder={false}
+        onStartAnalysis={(profileId) => {
+          console.log("Starting dashboard scan for profile:", profileId)
+          setImageSourceBackScreen("dashboard")
+          setCapturedImageUrl(null)
+          setCurrentScreen("image-source")
+        }}
+        onChangeProfile={() => {
+          setProfileManagementBackScreen("dashboard")
+          setCurrentScreen("profile-management")
+        }}
+        onOpenLatestReport={(reportId) => {
+          console.log("Opening dashboard latest report:", reportId)
+          setCurrentScreen("results-summary")
+        }}
+        onOpenRoutine={(routineId) => {
+          console.log("Opening dashboard routine:", routineId)
+          setRoutineBackScreen("dashboard")
+          setCurrentScreen("routine")
+        }}
+        onOpenGuestScanner={() => {
+          setIngredientScannerEntryBackScreen("dashboard")
+          setIngredientScannerSelectedProfileId(activeManagedProfileId)
+          setCurrentScreen("ingredient-scanner-entry")
+        }}
+        onOpenProgress={() => {
+          console.log("Opening dashboard progress...")
+        }}
+        onOpenOrders={() => {
+          console.log("Opening dashboard orders...")
+        }}
+        onOpenStore={() => {
+          setStoreBackScreen("dashboard")
+          setCurrentScreen("store")
+        }}
+        onOpenRecentOrder={(orderId) => {
+          console.log("Opening dashboard recent order:", orderId)
+        }}
+        onRetryLoad={() => {
+          console.log("Retrying dashboard load...")
+        }}
+      />
+    )
+  }
+
   // Store Routine Collection Screen
   if (currentScreen === "store") {
     return (
@@ -1708,7 +2170,7 @@ export default function Page() {
         canModifyCart={true}
         canOpenCart={true}
         onBack={() => {
-          setCurrentScreen("routine")
+          setCurrentScreen(storeBackScreen)
         }}
         onOpenCart={() => {
           setCurrentScreen("cart")
@@ -1736,9 +2198,10 @@ export default function Page() {
         isOffline={false}
         canOpenStore={true}
         onBack={() => {
-          setCurrentScreen("full-report")
+          setCurrentScreen(routineBackScreen)
         }}
         onOpenStore={() => {
+          setStoreBackScreen("routine")
           setCurrentScreen("store")
         }}
         onOpenProduct={(productId) => {
@@ -1763,6 +2226,7 @@ export default function Page() {
           setCurrentScreen("results-summary")
         }}
         onOpenRoutine={() => {
+          setRoutineBackScreen("full-report")
           setCurrentScreen("routine")
         }}
         onShareReport={() => {
@@ -1791,9 +2255,10 @@ export default function Page() {
         isOffline={false}
         canBuildRoutine={true}
         onClose={() => {
-          setCurrentScreen("welcome")
+          setCurrentScreen("dashboard")
         }}
         onOpenRoutine={() => {
+          setRoutineBackScreen("results-summary")
           setCurrentScreen("routine")
         }}
         onOpenDetailedReport={() => {
@@ -1869,7 +2334,8 @@ export default function Page() {
           setCurrentScreen("image-source")
         }}
         onChangeProfile={() => {
-          setCurrentScreen("profile-setup")
+          setProfileManagementBackScreen("image-review")
+          setCurrentScreen("profile-management")
         }}
       />
     )
@@ -1902,7 +2368,7 @@ export default function Page() {
     return (
       <ImageSourceSelectionScreen
         profileName={profileName}
-        onBack={() => setCurrentScreen("profile-setup")}
+        onBack={() => setCurrentScreen(imageSourceBackScreen)}
         onChooseCamera={() => {
           setCurrentScreen("camera")
         }}
@@ -1913,7 +2379,8 @@ export default function Page() {
           setCurrentScreen("image-review")
         }}
         onChangeProfile={() => {
-          setCurrentScreen("profile-setup")
+          setProfileManagementBackScreen("image-source")
+          setCurrentScreen("profile-management")
         }}
       />
     )
@@ -1923,10 +2390,24 @@ export default function Page() {
     return (
       <ProfileSetupScreen
         countries={sampleCountries}
-        onBack={() => setCurrentScreen("privacy-consent")}
+        onBack={() => setCurrentScreen(profileSetupBackScreen)}
         onSaveProfile={(profile) => {
           console.log("Profile saved:", profile)
           setProfileName(profile.profileName)
+          if (profileSetupBackScreen === "privacy-consent") {
+            setManagedProfileDisplayNames((current) => ({
+              ...current,
+              "profile-001": profile.profileName,
+            }))
+            setActiveManagedProfileId("profile-001")
+          }
+          setImageSourceBackScreen(
+            profileSetupBackScreen === "dashboard"
+              ? "dashboard"
+              : profileSetupBackScreen === "profile-management"
+                ? "profile-management"
+                : "profile-setup",
+          )
           setCurrentScreen("image-source")
         }}
       />
@@ -1941,6 +2422,7 @@ export default function Page() {
         onBack={() => setCurrentScreen("welcome")}
         onAcceptConsent={(record) => {
           console.log("Consent accepted:", record)
+          setProfileSetupBackScreen("privacy-consent")
           setCurrentScreen("profile-setup")
         }}
         onDeclineConsent={() => {
@@ -1963,7 +2445,9 @@ export default function Page() {
         console.log("Opening sign in...")
       }}
       onOpenGuestScanner={() => {
-        console.log("Opening guest scanner...")
+        setIngredientScannerEntryBackScreen("welcome")
+        setIngredientScannerSelectedProfileId(null)
+        setCurrentScreen("ingredient-scanner-entry")
       }}
     />
   )

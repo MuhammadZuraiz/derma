@@ -21,10 +21,13 @@ type MockProps = Record<string, any>
 type User = ReturnType<typeof userEvent.setup>
 
 vi.mock("@/components/welcome-screen", () => ({
-  default: ({ onStartAnalysis }: MockProps) => (
+  default: ({ onOpenGuestScanner, onStartAnalysis }: MockProps) => (
     <section data-testid="welcome-screen">
       <button onClick={onStartAnalysis} type="button">
         Start analysis
+      </button>
+      <button onClick={onOpenGuestScanner} type="button">
+        Open guest ingredient scanner
       </button>
     </section>
   ),
@@ -41,8 +44,11 @@ vi.mock("@/components/privacy-consent-screen", () => ({
 }))
 
 vi.mock("@/components/profile-setup-screen", () => ({
-  default: ({ onSaveProfile }: MockProps) => (
+  default: ({ onBack, onSaveProfile }: MockProps) => (
     <section data-testid="profile-screen">
+      <button onClick={onBack} type="button">
+        Profile back
+      </button>
       <button onClick={() => onSaveProfile({ profileName: "Route Tester" })} type="button">
         Save profile
       </button>
@@ -51,10 +57,17 @@ vi.mock("@/components/profile-setup-screen", () => ({
 }))
 
 vi.mock("@/components/image-source-selection-screen", () => ({
-  default: ({ onChooseUpload }: MockProps) => (
+  default: ({ onBack, onChangeProfile, onChooseUpload, profileName }: MockProps) => (
     <section data-testid="image-source-screen">
+      <div data-testid="image-source-profile-name">{profileName}</div>
+      <button onClick={onBack} type="button">
+        Image source back
+      </button>
       <button onClick={onChooseUpload} type="button">
         Choose upload
+      </button>
+      <button onClick={onChangeProfile} type="button">
+        Change profile from image source
       </button>
     </section>
   ),
@@ -71,10 +84,15 @@ vi.mock("@/components/camera-capture-screen", () => ({
 }))
 
 vi.mock("@/components/selected-image-review-screen", () => ({
-  default: ({ onUsePhoto }: MockProps) => (
+  default: ({ imageUrl, onChangeProfile, onUsePhoto, profileName }: MockProps) => (
     <section data-testid="image-review-screen">
+      <div data-testid="image-review-profile-name">{profileName}</div>
+      <div data-testid="image-review-image-url">{imageUrl}</div>
       <button onClick={onUsePhoto} type="button">
         Use photo
+      </button>
+      <button onClick={onChangeProfile} type="button">
+        Change profile from image review
       </button>
     </section>
   ),
@@ -98,13 +116,281 @@ vi.mock("@/components/analysis-processing-screen", () => ({
 }))
 
 vi.mock("@/components/results-summary-screen", () => ({
-  default: ({ onOpenDetailedReport, onOpenRoutine }: MockProps) => (
+  default: ({ onClose, onOpenDetailedReport, onOpenRoutine }: MockProps) => (
     <section data-testid="results-screen">
+      <button onClick={onClose} type="button">
+        Close results
+      </button>
       <button onClick={onOpenDetailedReport} type="button">
         Open detailed report
       </button>
       <button onClick={onOpenRoutine} type="button">
         Open routine from results
+      </button>
+    </section>
+  ),
+}))
+
+vi.mock("@/components/home-dashboard-screen", () => ({
+  default: ({
+    canOpenGuestScanner,
+    canOpenOrders,
+    canOpenProgress,
+    canOpenRecentOrder,
+    isGuestScannerAvailableOffline,
+    onChangeProfile,
+    onOpenGuestScanner,
+    onOpenLatestReport,
+    onOpenOrders,
+    onOpenProgress,
+    onOpenRecentOrder,
+    onOpenRoutine,
+    onOpenStore,
+    onStartAnalysis,
+    report,
+    showEnvironmentalModule,
+  }: MockProps) => (
+    <section data-testid="dashboard-screen">
+      <div data-testid="dashboard-report">{JSON.stringify(report)}</div>
+      <div data-testid="dashboard-props">
+        {JSON.stringify({
+          canOpenGuestScanner,
+          canOpenOrders,
+          canOpenProgress,
+          canOpenRecentOrder,
+          isGuestScannerAvailableOffline,
+          showEnvironmentalModule,
+        })}
+      </div>
+      <button
+        onClick={() => onStartAnalysis(report.profile.profileId)}
+        type="button"
+      >
+        Dashboard start new scan
+      </button>
+      <button onClick={onChangeProfile} type="button">
+        Dashboard change profile
+      </button>
+      <button
+        onClick={() => onOpenLatestReport(report.latestSnapshot.reportId)}
+        type="button"
+      >
+        Dashboard open latest report
+      </button>
+      <button
+        onClick={() => onOpenRoutine(report.routine.routineId)}
+        type="button"
+      >
+        Dashboard open routine
+      </button>
+      <button
+        disabled={!canOpenGuestScanner}
+        onClick={onOpenGuestScanner}
+        type="button"
+      >
+        Open dashboard ingredient scanner
+      </button>
+      <button
+        disabled={!canOpenProgress}
+        onClick={onOpenProgress}
+        type="button"
+      >
+        Dashboard open progress
+      </button>
+      <button
+        disabled={!canOpenOrders}
+        onClick={onOpenOrders}
+        type="button"
+      >
+        Dashboard open orders
+      </button>
+      <button onClick={onOpenStore} type="button">
+        Dashboard open store
+      </button>
+      <button
+        disabled={!canOpenRecentOrder}
+        onClick={() => onOpenRecentOrder(report.recentOrder.orderId)}
+        type="button"
+      >
+        Dashboard open recent order
+      </button>
+    </section>
+  ),
+}))
+
+vi.mock("@/components/profile-switcher-and-management-screen", () => ({
+  default: ({
+    canAddProfile,
+    canDeleteProfiles,
+    canEditProfiles,
+    canGoBack,
+    canOpenSyncSettings,
+    canSelectProfiles,
+    isOffline,
+    onAddProfile,
+    onBack,
+    onDeleteProfile,
+    onEditProfile,
+    onOpenSyncSettings,
+    onRetryLoad,
+    onSelectProfile,
+    report,
+    state,
+  }: MockProps) => {
+    const profiles = report?.profiles ?? []
+    const activeProfile = profiles.find((profile: MockProps) => profile.isActive)
+    const summary = {
+      state,
+      isOffline,
+      canGoBack,
+      canAddProfile,
+      canOpenSyncSettings,
+      canSelectProfiles,
+      canEditProfiles,
+      canDeleteProfiles,
+      profileIds: profiles.map((profile: MockProps) => profile.profileId),
+      activeProfileId: activeProfile?.profileId ?? null,
+      activeDisplayName: activeProfile?.displayName ?? null,
+      displayNames: profiles.map((profile: MockProps) => profile.displayName),
+    }
+
+    return (
+      <section data-testid="profile-management-screen">
+        <div data-testid="profile-management-report-summary">
+          {JSON.stringify(summary)}
+        </div>
+        <button onClick={onBack} type="button">
+          Profile management back
+        </button>
+        <button onClick={() => onSelectProfile("profile-002")} type="button">
+          Profile management select Maya
+        </button>
+        <button onClick={() => onSelectProfile("profile-001")} type="button">
+          Profile management select primary
+        </button>
+        <button onClick={onAddProfile} type="button">
+          Profile management add profile
+        </button>
+        <button onClick={() => onEditProfile("profile-002")} type="button">
+          Profile management edit Maya
+        </button>
+        <button onClick={onOpenSyncSettings} type="button">
+          Profile management open sync
+        </button>
+        <button onClick={() => onDeleteProfile("profile-002")} type="button">
+          Profile management delete Maya
+        </button>
+        <button onClick={onRetryLoad} type="button">
+          Profile management retry
+        </button>
+      </section>
+    )
+  },
+}))
+
+vi.mock("@/components/guest-ingredient-scanner-entry-screen", () => ({
+  default: ({
+    onBack,
+    onChangeProfile,
+    onChoosePhoto,
+    onContinueWithoutProfile,
+    onEnterIngredientsManually,
+    onRetryLoad,
+    onTakePhoto,
+    report,
+  }: MockProps) => {
+    const selectedProfile = report?.selectedProfile ?? null
+
+    return (
+      <section data-testid="scanner-entry-screen">
+        <div data-testid="scanner-entry-report">
+          {JSON.stringify({
+            displayName: selectedProfile?.displayName ?? null,
+            mode: selectedProfile ? "profiled" : "guest",
+            profileId: selectedProfile?.profileId ?? null,
+          })}
+        </div>
+        <button onClick={onBack} type="button">
+          Scanner entry back
+        </button>
+        <button onClick={() => onTakePhoto(selectedProfile ? { profileId: selectedProfile.profileId } : {})} type="button">
+          Scanner entry take photo
+        </button>
+        <button onClick={() => onChoosePhoto(selectedProfile ? { profileId: selectedProfile.profileId } : {})} type="button">
+          Scanner entry choose photo
+        </button>
+        <button onClick={() => onEnterIngredientsManually(selectedProfile ? { profileId: selectedProfile.profileId } : {})} type="button">
+          Scanner entry manual entry
+        </button>
+        <button onClick={onChangeProfile} type="button">
+          Scanner entry change profile
+        </button>
+        <button onClick={onContinueWithoutProfile} type="button">
+          Scanner entry continue as guest
+        </button>
+        <button onClick={onRetryLoad} type="button">
+          Scanner entry retry
+        </button>
+      </section>
+    )
+  },
+}))
+
+vi.mock("@/components/ingredient-input-review-screen", () => ({
+  default: ({
+    onBack,
+    onChangeMethod,
+    onChangeProfile,
+    onContinue,
+    onIngredientTextChange,
+    onRetryLoad,
+    report,
+    state,
+  }: MockProps) => (
+    <section data-testid="ingredient-review-screen">
+      <div data-testid="review-state">{state}</div>
+      <div data-testid="review-draft-id">{report?.draftId ?? ""}</div>
+      <div data-testid="review-source">{report?.source ?? ""}</div>
+      <div data-testid="review-source-label">{report?.sourceLabel ?? ""}</div>
+      <div data-testid="review-ingredient-text">{report?.ingredientText ?? ""}</div>
+      <div data-testid="review-selected-profile-id">{report?.selectedProfile?.profileId ?? ""}</div>
+      <div data-testid="review-selected-profile-display-name">{report?.selectedProfile?.displayName ?? ""}</div>
+      <div data-testid="review-mode">{report?.selectedProfile ? "profiled" : "guest"}</div>
+      <button onClick={onBack} type="button">
+        Ingredient review back
+      </button>
+      <button onClick={onChangeMethod} type="button">
+        Ingredient review change method
+      </button>
+      <button
+        onClick={() =>
+          onIngredientTextChange("  Water,\nNiacinamide, Fragrance  ")
+        }
+        type="button"
+      >
+        Ingredient review edit text
+      </button>
+      <button onClick={onChangeProfile} type="button">
+        Ingredient review change profile
+      </button>
+      <button
+        onClick={() =>
+          onContinue({
+            draftId: report.draftId,
+            ingredientText: report.ingredientText,
+            ...(report.selectedProfile
+              ? {
+                  profileId: report.selectedProfile.profileId,
+                }
+              : {}),
+          })
+        }
+        type="button"
+      >
+        Ingredient review continue
+      </button>
+      <button onClick={onRetryLoad} type="button">
+        Ingredient review retry
       </button>
     </section>
   ),
@@ -121,8 +407,11 @@ vi.mock("@/components/full-report-detail-screen", () => ({
 }))
 
 vi.mock("@/components/routine-recommendations-screen", () => ({
-  default: ({ onOpenProduct, onOpenStore }: MockProps) => (
+  default: ({ onBack, onOpenProduct, onOpenStore }: MockProps) => (
     <section data-testid="routine-screen">
+      <button onClick={onBack} type="button">
+        Routine back
+      </button>
       <button onClick={onOpenStore} type="button">
         Open store
       </button>
@@ -137,8 +426,11 @@ vi.mock("@/components/routine-recommendations-screen", () => ({
 }))
 
 vi.mock("@/components/dermalens-store-routine-collection-screen", () => ({
-  default: ({ onOpenCart, onOpenProduct }: MockProps) => (
+  default: ({ onBack, onOpenCart, onOpenProduct }: MockProps) => (
     <section data-testid="store-screen">
+      <button onClick={onBack} type="button">
+        Store back
+      </button>
       <button onClick={onOpenCart} type="button">
         Open cart
       </button>
@@ -280,12 +572,7 @@ function renderPage() {
 }
 
 async function goToRoutine(user: User) {
-  await user.click(screen.getByRole("button", { name: "Start analysis" }))
-  await user.click(screen.getByRole("button", { name: "Accept consent" }))
-  await user.click(screen.getByRole("button", { name: "Save profile" }))
-  await user.click(screen.getByRole("button", { name: "Choose upload" }))
-  await user.click(screen.getByRole("button", { name: "Use photo" }))
-  await user.click(screen.getByRole("button", { name: "View results" }))
+  await goToResultsSummary(user)
   await user.click(screen.getByRole("button", { name: "Open detailed report" }))
   await user.click(screen.getByRole("button", { name: "Build routine" }))
   expect(screen.getByTestId("routine-screen")).toBeInTheDocument()
@@ -311,11 +598,850 @@ async function goToCheckoutReview(user: User) {
   expect(screen.getByTestId("checkout-review-screen")).toBeInTheDocument()
 }
 
+async function goToDashboard(user: User) {
+  await goToResultsSummary(user)
+  await user.click(screen.getByRole("button", { name: "Close results" }))
+  expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+}
+
+async function goToResultsSummary(user: User) {
+  await goToImageReview(user)
+  await user.click(screen.getByRole("button", { name: "Use photo" }))
+  await user.click(screen.getByRole("button", { name: "View results" }))
+  expect(screen.getByTestId("results-screen")).toBeInTheDocument()
+}
+
+async function goToImageReview(user: User) {
+  await user.click(screen.getByRole("button", { name: "Start analysis" }))
+  await user.click(screen.getByRole("button", { name: "Accept consent" }))
+  await user.click(screen.getByRole("button", { name: "Save profile" }))
+  await user.click(screen.getByRole("button", { name: "Choose upload" }))
+  expect(screen.getByTestId("image-review-screen")).toBeInTheDocument()
+}
+
 function getJson(testId: string) {
   return JSON.parse(screen.getByTestId(testId).textContent ?? "null")
 }
 
+function getProfileManagementSummary() {
+  return getJson("profile-management-report-summary")
+}
+
+function getScannerEntryReport() {
+  return getJson("scanner-entry-report")
+}
+
+function getIngredientReviewReport() {
+  return {
+    draftId: screen.getByTestId("review-draft-id").textContent ?? "",
+    ingredientText:
+      screen.getByTestId("review-ingredient-text").textContent ?? "",
+    mode: screen.getByTestId("review-mode").textContent ?? "",
+    selectedProfileDisplayName:
+      screen.getByTestId("review-selected-profile-display-name").textContent ??
+      "",
+    selectedProfileId:
+      screen.getByTestId("review-selected-profile-id").textContent ?? "",
+    source: screen.getByTestId("review-source").textContent ?? "",
+    sourceLabel: screen.getByTestId("review-source-label").textContent ?? "",
+    state: screen.getByTestId("review-state").textContent ?? "",
+  }
+}
+
+function getBodyTextOutsideProfileManagementReport() {
+  const renderedOutsideReport = document.body.cloneNode(true) as HTMLElement
+  renderedOutsideReport
+    .querySelector('[data-testid="profile-management-report-summary"]')
+    ?.remove()
+  return renderedOutsideReport.textContent ?? ""
+}
+
+async function goToWelcomeScannerEntry(user: User) {
+  await user.click(screen.getByRole("button", { name: "Open guest ingredient scanner" }))
+  expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+}
+
+async function goToWelcomeManualReview(user: User) {
+  await goToWelcomeScannerEntry(user)
+  await user.click(screen.getByRole("button", { name: "Scanner entry manual entry" }))
+  expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
+}
+
+async function goToDashboardScannerEntry(user: User) {
+  await goToDashboard(user)
+  await user.click(screen.getByRole("button", { name: "Open dashboard ingredient scanner" }))
+  expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+}
+
+async function goToDashboardPhotoReview(user: User) {
+  await goToDashboardScannerEntry(user)
+  await user.click(screen.getByRole("button", { name: "Scanner entry take photo" }))
+  expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
+}
+
 describe("Page route controller", () => {
+  it("routes completed scan results Close to the dashboard", async () => {
+    const user = renderPage()
+
+    await goToDashboard(user)
+
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+  })
+
+  it("keeps first-time profile setup routing directly to image source", async () => {
+    const user = renderPage()
+
+    await user.click(screen.getByRole("button", { name: "Start analysis" }))
+    await user.click(screen.getByRole("button", { name: "Accept consent" }))
+    await user.click(screen.getByRole("button", { name: "Save profile" }))
+
+    expect(screen.getByTestId("image-source-screen")).toBeInTheDocument()
+    expect(screen.queryByTestId("dashboard-screen")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("profile-management-screen")).not.toBeInTheDocument()
+  })
+
+  it("routes Welcome guest scanner to scanner entry in guest mode", async () => {
+    const user = renderPage()
+
+    await user.click(screen.getByRole("button", { name: "Open guest ingredient scanner" }))
+
+    expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+    expect(getScannerEntryReport()).toMatchObject({
+      displayName: null,
+      mode: "guest",
+      profileId: null,
+    })
+  })
+
+  it("returns from Welcome scanner entry Back to Welcome", async () => {
+    const user = renderPage()
+
+    await user.click(screen.getByRole("button", { name: "Open guest ingredient scanner" }))
+    expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Scanner entry back" }))
+
+    expect(screen.getByTestId("welcome-screen")).toBeInTheDocument()
+  })
+
+  it("routes dashboard Start new scan to image source and clears the previous image review path", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard start new scan" }))
+
+    expect(screen.getByTestId("image-source-screen")).toBeInTheDocument()
+    expect(screen.queryByTestId("image-review-screen")).not.toBeInTheDocument()
+  })
+
+  it("routes dashboard Ingredient scanner to scanner entry with active profile context", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Open dashboard ingredient scanner" }))
+
+    expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+    expect(getScannerEntryReport()).toMatchObject({
+      displayName: "Route Tester",
+      mode: "profiled",
+      profileId: "profile-001",
+    })
+  })
+
+  it("returns from dashboard scanner entry Back to the dashboard", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Open dashboard ingredient scanner" }))
+    expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Scanner entry back" }))
+
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+  })
+
+  it("routes dashboard Change profile to profile management", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+
+    expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
+    expect(getProfileManagementSummary()).toMatchObject({
+      profileIds: ["profile-001", "profile-002"],
+      activeProfileId: "profile-001",
+      activeDisplayName: "Route Tester",
+    })
+  })
+
+  it("routes dashboard Latest report to results summary", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard open latest report" }))
+
+    expect(screen.getByTestId("results-screen")).toBeInTheDocument()
+  })
+
+  it("routes dashboard Active routine to routine recommendations", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard open routine" }))
+
+    expect(screen.getByTestId("routine-screen")).toBeInTheDocument()
+  })
+
+  it("routes dashboard Store to the store collection", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard open store" }))
+
+    expect(screen.getByTestId("store-screen")).toBeInTheDocument()
+  })
+
+  it("returns from dashboard Start new scan image source Back to the dashboard", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard start new scan" }))
+    expect(screen.getByTestId("image-source-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Image source back" }))
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+  })
+
+  it("returns from dashboard Change profile Back to the dashboard", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+    expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Profile management back" }))
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+  })
+
+  it("returns from dashboard profile selection to the dashboard with the selected name", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+    await user.click(screen.getByRole("button", { name: "Profile management select Maya" }))
+
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+    expect(getJson("dashboard-report").profile.displayName).toBe("Maya")
+    expect(logSpy).toHaveBeenCalledWith("Selecting profile:", "profile-002")
+  })
+
+  it("refreshes the dashboard opaque profile ID after selecting Maya", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+    await user.click(screen.getByRole("button", { name: "Profile management select Maya" }))
+
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+    expect(getJson("dashboard-report").profile.profileId).toBe("profile-002")
+  })
+
+  it("uses the selected dashboard profile ID for the next scan action", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+    await user.click(screen.getByRole("button", { name: "Profile management select Maya" }))
+    await user.click(screen.getByRole("button", { name: "Dashboard start new scan" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Starting dashboard scan for profile:",
+      "profile-002",
+    )
+    expect(screen.getByTestId("image-source-screen")).toBeInTheDocument()
+  })
+
+  it("keeps known managed-profile labels stable across profile switches", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+    await user.click(screen.getByRole("button", { name: "Profile management select Maya" }))
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+
+    expect(getProfileManagementSummary().displayNames).toEqual([
+      "Route Tester",
+      "Maya",
+    ])
+
+    await user.click(screen.getByRole("button", { name: "Profile management select primary" }))
+
+    const dashboardReport = getJson("dashboard-report")
+    expect(dashboardReport.profile.displayName).toBe("Route Tester")
+    expect(dashboardReport.profile.profileId).toBe("profile-001")
+  })
+
+  it("routes image source Change profile to profile management", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard start new scan" }))
+    expect(screen.getByTestId("image-source-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Change profile from image source" }))
+
+    expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
+    expect(getProfileManagementSummary().profileIds).toEqual([
+      "profile-001",
+      "profile-002",
+    ])
+  })
+
+  it("returns from image-source profile management Back to image source", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard start new scan" }))
+    await user.click(screen.getByRole("button", { name: "Change profile from image source" }))
+    expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Profile management back" }))
+
+    expect(screen.getByTestId("image-source-screen")).toBeInTheDocument()
+  })
+
+  it("returns from image-source profile selection with the selected profile name", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard start new scan" }))
+    await user.click(screen.getByRole("button", { name: "Change profile from image source" }))
+    await user.click(screen.getByRole("button", { name: "Profile management select Maya" }))
+
+    expect(screen.getByTestId("image-source-screen")).toBeInTheDocument()
+    expect(screen.getByTestId("image-source-profile-name")).toHaveTextContent("Maya")
+  })
+
+  it("routes selected-image review Change profile to profile management", async () => {
+    const user = renderPage()
+    await goToImageReview(user)
+
+    await user.click(screen.getByRole("button", { name: "Change profile from image review" }))
+
+    expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
+  })
+
+  it("returns from selected-image review profile management Back with the image retained", async () => {
+    const user = renderPage()
+    await goToImageReview(user)
+    const imageUrl = screen.getByTestId("image-review-image-url").textContent
+
+    await user.click(screen.getByRole("button", { name: "Change profile from image review" }))
+    await user.click(screen.getByRole("button", { name: "Profile management back" }))
+
+    expect(screen.getByTestId("image-review-screen")).toBeInTheDocument()
+    expect(screen.getByTestId("image-review-image-url")).toHaveTextContent(imageUrl ?? "")
+    expect(screen.queryByTestId("image-source-screen")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("camera-screen")).not.toBeInTheDocument()
+  })
+
+  it("returns from selected-image review profile selection with the selected profile name", async () => {
+    const user = renderPage()
+    await goToImageReview(user)
+
+    await user.click(screen.getByRole("button", { name: "Change profile from image review" }))
+    await user.click(screen.getByRole("button", { name: "Profile management select Maya" }))
+
+    expect(screen.getByTestId("image-review-screen")).toBeInTheDocument()
+    expect(screen.getByTestId("image-review-profile-name")).toHaveTextContent("Maya")
+  })
+
+  it("returns from scanner entry profile management Back to scanner entry", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Open dashboard ingredient scanner" }))
+    await user.click(screen.getByRole("button", { name: "Scanner entry change profile" }))
+    expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Profile management back" }))
+
+    expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+    expect(getScannerEntryReport()).toMatchObject({
+      profileId: "profile-001",
+      displayName: "Route Tester",
+    })
+  })
+
+  it("returns from scanner entry profile selection with refreshed optional profile context", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Open dashboard ingredient scanner" }))
+    await user.click(screen.getByRole("button", { name: "Scanner entry change profile" }))
+    await user.click(screen.getByRole("button", { name: "Profile management select Maya" }))
+
+    expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+    expect(getScannerEntryReport()).toMatchObject({
+      displayName: "Maya",
+      mode: "profiled",
+      profileId: "profile-002",
+    })
+  })
+
+  it("clears only scanner optional profile context when continuing as guest", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Open dashboard ingredient scanner" }))
+    expect(getScannerEntryReport()).toMatchObject({
+      profileId: "profile-001",
+    })
+
+    await user.click(screen.getByRole("button", { name: "Scanner entry continue as guest" }))
+
+    expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+    expect(getScannerEntryReport()).toMatchObject({
+      displayName: null,
+      mode: "guest",
+      profileId: null,
+    })
+
+    await user.click(screen.getByRole("button", { name: "Scanner entry back" }))
+    expect(getJson("dashboard-report").profile.profileId).toBe("profile-001")
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+    expect(getProfileManagementSummary()).toMatchObject({
+      activeProfileId: "profile-001",
+      activeDisplayName: "Route Tester",
+    })
+  })
+
+  it("routes Welcome guest manual entry into ingredient review", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+
+    await goToWelcomeManualReview(user)
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Opening ingredient scanner manual-entry route:",
+      {},
+    )
+    expect(getIngredientReviewReport()).toMatchObject({
+      draftId: "ingredient-draft-manual-001",
+      ingredientText: "",
+      mode: "guest",
+      selectedProfileId: "",
+      source: "manual-entry",
+      sourceLabel: "Manual ingredient-text draft",
+      state: "ready",
+    })
+    expect(screen.queryByTestId("camera-screen")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("image-source-screen")).not.toBeInTheDocument()
+  })
+
+  it("routes Dashboard scanner photo into profiled ingredient review", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+
+    await goToDashboardPhotoReview(user)
+
+    const submission = { profileId: "profile-001" }
+    expect(logSpy).toHaveBeenCalledWith(
+      "Opening ingredient scanner camera route:",
+      submission,
+    )
+    expect(getIngredientReviewReport()).toMatchObject({
+      ingredientText: "Aqua, Glycerin, Niacinamide",
+      mode: "profiled",
+      selectedProfileDisplayName: "Route Tester",
+      selectedProfileId: "profile-001",
+      source: "camera-photo",
+    })
+    expect(screen.queryByTestId("analysis-screen")).not.toBeInTheDocument()
+  })
+
+  it("routes chosen-photo scanner entry into ingredient review", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+
+    await goToWelcomeScannerEntry(user)
+    await user.click(screen.getByRole("button", { name: "Scanner entry choose photo" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Opening ingredient scanner picker route:",
+      {},
+    )
+    expect(getIngredientReviewReport()).toMatchObject({
+      draftId: "ingredient-draft-picker-001",
+      source: "chosen-photo",
+    })
+  })
+
+  it("returns from ingredient review Back to scanner entry with optional profile restored", async () => {
+    const user = renderPage()
+    await goToDashboardPhotoReview(user)
+
+    await user.click(screen.getByRole("button", { name: "Ingredient review back" }))
+
+    expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+    expect(getScannerEntryReport()).toMatchObject({
+      displayName: "Route Tester",
+      mode: "profiled",
+      profileId: "profile-001",
+    })
+  })
+
+  it("returns from ingredient review Change method to scanner entry with optional profile restored", async () => {
+    const user = renderPage()
+    await goToDashboardPhotoReview(user)
+
+    await user.click(screen.getByRole("button", { name: "Ingredient review change method" }))
+
+    expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+    expect(getScannerEntryReport()).toMatchObject({
+      displayName: "Route Tester",
+      mode: "profiled",
+      profileId: "profile-001",
+    })
+  })
+
+  it("keeps ingredient review text controlled by exact raw controller draft updates", async () => {
+    const user = renderPage()
+    await goToWelcomeManualReview(user)
+
+    await user.click(screen.getByRole("button", { name: "Ingredient review edit text" }))
+
+    expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
+    expect(getIngredientReviewReport()).toMatchObject({
+      ingredientText: "  Water,\nNiacinamide, Fragrance  ",
+      source: "manual-entry",
+    })
+  })
+
+  it("returns from ingredient-review profile management Back with draft intact", async () => {
+    const user = renderPage()
+    await goToDashboardPhotoReview(user)
+    const initialReport = getIngredientReviewReport()
+
+    await user.click(screen.getByRole("button", { name: "Ingredient review change profile" }))
+    await user.click(screen.getByRole("button", { name: "Profile management back" }))
+
+    expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
+    expect(getIngredientReviewReport()).toMatchObject({
+      draftId: initialReport.draftId,
+      ingredientText: initialReport.ingredientText,
+      source: initialReport.source,
+    })
+  })
+
+  it("returns from ingredient-review profile selection with refreshed selected profile", async () => {
+    const user = renderPage()
+    await goToDashboardPhotoReview(user)
+    const initialReport = getIngredientReviewReport()
+
+    await user.click(screen.getByRole("button", { name: "Ingredient review change profile" }))
+    await user.click(screen.getByRole("button", { name: "Profile management select Maya" }))
+
+    expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
+    expect(getIngredientReviewReport()).toMatchObject({
+      draftId: initialReport.draftId,
+      ingredientText: initialReport.ingredientText,
+      selectedProfileDisplayName: "Maya",
+      selectedProfileId: "profile-002",
+      source: initialReport.source,
+    })
+  })
+
+  it("keeps guest ingredient review Continue as a future-route log only", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToWelcomeManualReview(user)
+
+    await user.click(screen.getByRole("button", { name: "Ingredient review edit text" }))
+    await user.click(screen.getByRole("button", { name: "Ingredient review continue" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Submitting reviewed ingredient draft for future guidance route:",
+      {
+        draftId: "ingredient-draft-manual-001",
+        ingredientText: "  Water,\nNiacinamide, Fragrance  ",
+      },
+    )
+    expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
+    expect(screen.queryByTestId("results-screen")).not.toBeInTheDocument()
+  })
+
+  it("keeps profiled ingredient review Continue as a future-route log only", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToDashboardPhotoReview(user)
+
+    await user.click(screen.getByRole("button", { name: "Ingredient review continue" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Submitting reviewed ingredient draft for future guidance route:",
+      {
+        draftId: "ingredient-draft-camera-001",
+        ingredientText: "Aqua, Glycerin, Niacinamide",
+        profileId: "profile-001",
+      },
+    )
+    expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
+    expect(screen.queryByTestId("results-screen")).not.toBeInTheDocument()
+  })
+
+  it("keeps ingredient review Retry as a future-adapter log", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToWelcomeManualReview(user)
+
+    await user.click(screen.getByRole("button", { name: "Ingredient review retry" }))
+
+    expect(logSpy).toHaveBeenCalledWith("Retrying ingredient input review load...")
+    expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
+  })
+
+  it("keeps scanner method activation inside adapter boundaries", async () => {
+    const originalMediaDevices = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "mediaDevices",
+    )
+    const originalFileReader = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "FileReader",
+    )
+    const mediaDevices = {
+      getUserMedia: vi.fn(),
+    }
+    const FileReaderSpy = vi.fn()
+
+    Object.defineProperty(window.navigator, "mediaDevices", {
+      configurable: true,
+      value: mediaDevices,
+    })
+    Object.defineProperty(globalThis, "FileReader", {
+      configurable: true,
+      value: FileReaderSpy,
+    })
+
+    try {
+      const user = renderPage()
+      await goToWelcomeScannerEntry(user)
+      await user.click(screen.getByRole("button", { name: "Scanner entry take photo" }))
+
+      expect(mediaDevices.getUserMedia).not.toHaveBeenCalled()
+      expect(FileReaderSpy).not.toHaveBeenCalled()
+      expect(document.querySelector('input[type="file"]')).toBeNull()
+      expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
+      expect(screen.queryByTestId("screen-22")).not.toBeInTheDocument()
+    } finally {
+      if (originalMediaDevices) {
+        Object.defineProperty(window.navigator, "mediaDevices", originalMediaDevices)
+      } else {
+        delete (window.navigator as unknown as { mediaDevices?: unknown }).mediaDevices
+      }
+
+      if (originalFileReader) {
+        Object.defineProperty(globalThis, "FileReader", originalFileReader)
+      } else {
+        delete (globalThis as { FileReader?: unknown }).FileReader
+      }
+    }
+  })
+
+  it("keeps scanner Retry as a future-adapter log", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+
+    await user.click(screen.getByRole("button", { name: "Open guest ingredient scanner" }))
+    await user.click(screen.getByRole("button", { name: "Scanner entry retry" }))
+
+    expect(logSpy).toHaveBeenCalledWith("Retrying ingredient scanner entry load...")
+    expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+  })
+
+  it("returns from add-profile setup Back to profile management", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+    await user.click(screen.getByRole("button", { name: "Profile management add profile" }))
+    expect(screen.getByTestId("profile-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Profile back" }))
+
+    expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
+  })
+
+  it("preserves profile-management source after Add profile Save and image source Back", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+    await user.click(screen.getByRole("button", { name: "Profile management add profile" }))
+    await user.click(screen.getByRole("button", { name: "Save profile" }))
+    expect(screen.getByTestId("image-source-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Image source back" }))
+    expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
+  })
+
+  it("returns from dashboard Active routine Back to the dashboard", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard open routine" }))
+    expect(screen.getByTestId("routine-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Routine back" }))
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+  })
+
+  it("returns from dashboard Store Back to the dashboard", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard open store" }))
+    expect(screen.getByTestId("store-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Store back" }))
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+  })
+
+  it("resets first-time profile save image source Back to profile setup", async () => {
+    const user = renderPage()
+
+    await user.click(screen.getByRole("button", { name: "Start analysis" }))
+    await user.click(screen.getByRole("button", { name: "Accept consent" }))
+    expect(screen.getByTestId("profile-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Save profile" }))
+    expect(screen.getByTestId("image-source-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Image source back" }))
+    expect(screen.getByTestId("profile-screen")).toBeInTheDocument()
+    expect(screen.queryByTestId("dashboard-screen")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("profile-management-screen")).not.toBeInTheDocument()
+  })
+
+  it("keeps future-adapter profile management actions as logs without route or fixture mutation", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+    const initialSummary = getProfileManagementSummary()
+
+    await user.click(screen.getByRole("button", { name: "Profile management edit Maya" }))
+    await user.click(screen.getByRole("button", { name: "Profile management open sync" }))
+    await user.click(screen.getByRole("button", { name: "Profile management delete Maya" }))
+    await user.click(screen.getByRole("button", { name: "Profile management retry" }))
+
+    expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
+    expect(getProfileManagementSummary()).toMatchObject(initialSummary)
+    expect(logSpy).toHaveBeenCalledWith("Editing profile:", "profile-002")
+    expect(logSpy).toHaveBeenCalledWith("Opening profile sync settings...")
+    expect(logSpy).toHaveBeenCalledWith("Deleting profile:", "profile-002")
+    expect(logSpy).toHaveBeenCalledWith("Retrying profile management load...")
+  })
+
+  it("returns from results summary routine Back to results summary", async () => {
+    const user = renderPage()
+    await goToResultsSummary(user)
+
+    await user.click(screen.getByRole("button", { name: "Open routine from results" }))
+    expect(screen.getByTestId("routine-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Routine back" }))
+    expect(screen.getByTestId("results-screen")).toBeInTheDocument()
+  })
+
+  it("returns from full report routine Back to full report", async () => {
+    const user = renderPage()
+    await goToResultsSummary(user)
+
+    await user.click(screen.getByRole("button", { name: "Open detailed report" }))
+    expect(screen.getByTestId("full-report-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Build routine" }))
+    expect(screen.getByTestId("routine-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Routine back" }))
+    expect(screen.getByTestId("full-report-screen")).toBeInTheDocument()
+  })
+
+  it("returns from routine Store Back to routine", async () => {
+    const user = renderPage()
+    await goToRoutine(user)
+
+    await user.click(screen.getByRole("button", { name: "Open store" }))
+    expect(screen.getByTestId("store-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Store back" }))
+    expect(screen.getByTestId("routine-screen")).toBeInTheDocument()
+  })
+
+  it("passes host-owned dashboard fixture data and blocks future routes", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    const props = getJson("dashboard-props")
+    expect(props).toMatchObject({
+      canOpenGuestScanner: true,
+      canOpenOrders: false,
+      canOpenProgress: false,
+      canOpenRecentOrder: false,
+      isGuestScannerAvailableOffline: false,
+      showEnvironmentalModule: false,
+    })
+
+    expect(screen.getByRole("button", { name: "Open dashboard ingredient scanner" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Dashboard open progress" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Dashboard open orders" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Dashboard open recent order" })).toBeDisabled()
+
+    const report = getJson("dashboard-report")
+    expect(report.profile.profileId).toBe("profile-001")
+    expect(report.latestSnapshot.reportId).toBe("report-001")
+    expect(report.routine.routineId).toBe("routine-001")
+    expect(report.recentOrder.orderId).toBe("order-001")
+
+    const renderedOutsideReport = document.body.cloneNode(true) as HTMLElement
+    renderedOutsideReport.querySelector('[data-testid="dashboard-report"]')?.remove()
+    expect(renderedOutsideReport.textContent).not.toContain("profile-001")
+    expect(renderedOutsideReport.textContent).not.toContain("report-001")
+    expect(renderedOutsideReport.textContent).not.toContain("routine-001")
+    expect(renderedOutsideReport.textContent).not.toContain("order-001")
+  })
+
+  it("keeps profile-management opaque IDs inside report inspection and refreshes active designation", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+    expect(getProfileManagementSummary()).toMatchObject({
+      profileIds: ["profile-001", "profile-002"],
+      activeProfileId: "profile-001",
+      activeDisplayName: "Route Tester",
+    })
+
+    const bodyTextOutsideReport = getBodyTextOutsideProfileManagementReport()
+    expect(bodyTextOutsideReport).not.toContain("profile-001")
+    expect(bodyTextOutsideReport).not.toContain("profile-002")
+
+    await user.click(screen.getByRole("button", { name: "Profile management select Maya" }))
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+    expect(getProfileManagementSummary()).toMatchObject({
+      activeProfileId: "profile-002",
+      activeDisplayName: "Maya",
+    })
+  })
+
   it("routes through checkout review and payment back paths", async () => {
     const user = renderPage()
 
