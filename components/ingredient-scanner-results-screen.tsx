@@ -277,6 +277,17 @@ function getDisplayText(
   return isNonWhitespaceString(value) ? value.trim() : fallback;
 }
 
+function getGuidanceItemRecord(
+  item: unknown,
+): Record<string, unknown> {
+  return (
+    item !== null &&
+    typeof item === "object"
+  )
+    ? item as Record<string, unknown>
+    : {};
+}
+
 function getTone(
   tone: unknown,
 ): IngredientGuidanceTone {
@@ -478,23 +489,24 @@ function SummaryCard({
 function GuidanceItemCard({
   item,
 }: {
-  item: IngredientScannerGuidanceItem;
+  item: unknown;
 }) {
-  const tone = getTone((item as { tone?: unknown }).tone);
+  const safeItem = getGuidanceItemRecord(item);
+  const tone = getTone(safeItem.tone);
   const name = getDisplayText(
-    (item as { name?: unknown }).name,
+    safeItem.name,
     copy.unnamedIngredient,
   );
   const flagLabel = getDisplayText(
-    (item as { flagLabel?: unknown }).flagLabel,
+    safeItem.flagLabel,
     copy.unavailableFlag,
   );
   const summary = getDisplayText(
-    (item as { summary?: unknown }).summary,
+    safeItem.summary,
     copy.unavailableSummary,
   );
-  const categoryLabel = (item as { categoryLabel?: unknown }).categoryLabel;
-  const supporting = (item as { supporting?: unknown }).supporting;
+  const categoryLabel = safeItem.categoryLabel;
+  const supporting = safeItem.supporting;
   const toneClassName =
     tone === "caution"
       ? "border-[var(--dl-peach-strong)] bg-[var(--dl-error-surface)]"
@@ -538,7 +550,7 @@ function GuidanceItemCard({
 function GuidanceList({
   items,
 }: {
-  items: IngredientScannerGuidanceItem[];
+  items: unknown[];
 }) {
   return (
     <section className="rounded-[8px] border border-[var(--dl-border-subtle)] bg-[var(--dl-surface)] p-5 shadow-sm">
@@ -556,11 +568,14 @@ function GuidanceList({
 
 function EmptyGuidanceCard() {
   return (
-    <section className="rounded-[8px] border border-[var(--dl-blush-strong)] bg-[var(--dl-error-surface)] p-5 shadow-sm">
-      <h2 className="text-lg font-bold text-[var(--dl-error-text)]">
+    <section
+      className="rounded-[8px] border border-[var(--dl-parchment)] bg-[var(--dl-surface-soft)] p-5 shadow-sm"
+      data-testid="empty-guidance-card"
+    >
+      <h2 className="text-lg font-bold text-[var(--dl-bark)]">
         {copy.emptyTitle}
       </h2>
-      <p className="mt-2 text-sm leading-6 text-[var(--dl-error-text)]">
+      <p className="mt-2 text-sm leading-6 text-[var(--dl-text-secondary)]">
         {copy.emptySupporting}
       </p>
     </section>

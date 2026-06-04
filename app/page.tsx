@@ -26,8 +26,13 @@ import IngredientInputReviewScreen, {
   type IngredientInputReviewSubmission,
   type IngredientInputSource,
 } from "@/components/ingredient-input-review-screen"
+import IngredientScannerResultsScreen, {
+  type IngredientScannerGuidanceItem,
+  type IngredientScannerResultSaveSubmission,
+  type IngredientScannerResultsReport,
+} from "@/components/ingredient-scanner-results-screen"
 
-type Screen = "welcome" | "privacy-consent" | "profile-setup" | "image-source" | "camera" | "image-review" | "analysis" | "results-summary" | "full-report" | "routine" | "store" | "cart" | "product-detail" | "checkout-details" | "checkout-review" | "payment-gateway" | "order-confirmation" | "dashboard" | "profile-management" | "ingredient-scanner-entry" | "ingredient-input-review"
+type Screen = "welcome" | "privacy-consent" | "profile-setup" | "image-source" | "camera" | "image-review" | "analysis" | "results-summary" | "full-report" | "routine" | "store" | "cart" | "product-detail" | "checkout-details" | "checkout-review" | "payment-gateway" | "order-confirmation" | "dashboard" | "profile-management" | "ingredient-scanner-entry" | "ingredient-input-review" | "ingredient-scanner-results"
 type ProductDetailSourceScreen = "routine" | "store" | "cart"
 type ManagedProfileId = "profile-001" | "profile-002"
 type IngredientScannerEntryBackScreen = "welcome" | "dashboard"
@@ -49,6 +54,13 @@ interface DemoIngredientInputDraft {
     sourceLabel?: string
   }
   extractionNoticeLabel?: string
+}
+
+interface DemoIngredientScannerResultContext {
+  resultId: string
+  draftId: string
+  sourceLabel: string
+  selectedProfileId: ManagedProfileId | null
 }
 
 const sampleCountries = [
@@ -75,6 +87,42 @@ const sampleIngredientSourceLabels = {
   "chosen-photo": "Demo host selected-label review draft",
   "manual-entry": "Manual ingredient-text draft",
 } satisfies Record<IngredientInputSource, string>
+
+const sampleIngredientResultIds = {
+  "camera-photo": "ingredient-result-camera-001",
+  "chosen-photo": "ingredient-result-picker-001",
+  "manual-entry": "ingredient-result-manual-001",
+} satisfies Record<IngredientInputSource, string>
+
+const sampleIngredientGuidanceItems: IngredientScannerGuidanceItem[] = [
+  {
+    itemId: "ingredient-guidance-item-001",
+    name: "Niacinamide",
+    flagLabel: "Host note: commonly used in skincare",
+    summary:
+      "This demo note is supplied by the controller fixture. Review the product label and your own routine context.",
+    categoryLabel: "Host-supplied note",
+    tone: "neutral",
+  },
+  {
+    itemId: "ingredient-guidance-item-002",
+    name: "Fragrance",
+    flagLabel: "Host note: review if you prefer fragrance-free products",
+    summary:
+      "This demo note is supplied by the controller fixture. It is not an allergy assessment or medical-safety determination.",
+    categoryLabel: "Host-supplied note",
+    tone: "attention",
+  },
+  {
+    itemId: "ingredient-guidance-item-003",
+    name: "Retinol",
+    flagLabel: "Host note: review routine timing",
+    summary:
+      "This demo note is supplied by the controller fixture. It does not diagnose suitability or provide treatment advice.",
+    categoryLabel: "Host-supplied note",
+    tone: "caution",
+  },
+]
 
 // Sample image for demo purposes
 const SAMPLE_IMAGE_URL = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&h=800&fit=crop&crop=face"
@@ -106,6 +154,8 @@ export default function Page() {
     useState<ManagedProfileId | null>(null)
   const [ingredientInputDraft, setIngredientInputDraft] =
     useState<DemoIngredientInputDraft | null>(null)
+  const [ingredientScannerResultContext, setIngredientScannerResultContext] =
+    useState<DemoIngredientScannerResultContext | null>(null)
   const [routineBackScreen, setRoutineBackScreen] =
     useState<RoutineBackScreen>("full-report")
   const [storeBackScreen, setStoreBackScreen] =
@@ -132,6 +182,8 @@ export default function Page() {
       profileId?: string
     },
   ) {
+    setIngredientScannerResultContext(null)
+
     const selectedProfileId =
       submission.profileId === "profile-001" ||
       submission.profileId === "profile-002"
@@ -154,6 +206,39 @@ export default function Page() {
     })
 
     setCurrentScreen("ingredient-input-review")
+  }
+
+  function openIngredientScannerResults(
+    submission: IngredientInputReviewSubmission,
+  ) {
+    const currentDraft = ingredientInputDraft
+
+    if (
+      currentDraft === null ||
+      submission.draftId !== currentDraft.draftId ||
+      submission.ingredientText !== currentDraft.ingredientText ||
+      submission.ingredientText.trim().length === 0
+    ) {
+      console.log(
+        "Ingredient result route blocked because the reviewed draft context is unavailable.",
+      )
+      return
+    }
+
+    const selectedProfileId =
+      submission.profileId === "profile-001" ||
+      submission.profileId === "profile-002"
+        ? submission.profileId
+        : null
+
+    setIngredientScannerResultContext({
+      resultId: sampleIngredientResultIds[currentDraft.source],
+      draftId: currentDraft.draftId,
+      sourceLabel: currentDraft.sourceLabel,
+      selectedProfileId,
+    })
+
+    setCurrentScreen("ingredient-scanner-results")
   }
 
   function returnToIngredientScannerEntry() {
@@ -685,6 +770,46 @@ export default function Page() {
           privacyLabel:
             "Guidance is not prepared until you explicitly continue.",
           extractionNoticeLabel: ingredientInputDraft.extractionNoticeLabel,
+        }
+      : null
+
+  const ingredientResultProfileMatches =
+    ingredientScannerResultContext?.selectedProfileId
+      ? sampleManagedProfiles.filter(
+          (profile) =>
+            profile.profileId ===
+            ingredientScannerResultContext.selectedProfileId,
+        )
+      : []
+
+  const ingredientResultSelectedProfile =
+    ingredientResultProfileMatches.length === 1
+      ? ingredientResultProfileMatches[0]
+      : null
+
+  const sampleIngredientScannerResultsReport:
+    IngredientScannerResultsReport | null =
+    ingredientScannerResultContext
+      ? {
+          resultId: ingredientScannerResultContext.resultId,
+          draftId: ingredientScannerResultContext.draftId,
+          sourceLabel: ingredientScannerResultContext.sourceLabel,
+          summaryLabel:
+            "Demo host-supplied ingredient notes for the reviewed draft.",
+          ingredientCountLabel: "3 host-supplied notes",
+          guidanceItems: sampleIngredientGuidanceItems,
+          selectedProfile: ingredientResultSelectedProfile
+            ? {
+                profileId: ingredientResultSelectedProfile.profileId,
+                displayName: ingredientResultSelectedProfile.displayName,
+                contextLabel:
+                  "Optional local profile context supplied by the demo host.",
+              }
+            : undefined,
+          helperLabel:
+            "This demo displays static host-shaped notes only. No persistence adapter is connected.",
+          disclaimerLabel:
+            "Use these notes as skincare guidance. They are not a medical assessment or allergy test.",
         }
       : null
 
@@ -1945,6 +2070,57 @@ export default function Page() {
     )
   }
 
+  // Ingredient Scanner Results Screen
+  if (currentScreen === "ingredient-scanner-results") {
+    return (
+      <IngredientScannerResultsScreen
+        state={sampleIngredientScannerResultsReport ? "ready" : "error"}
+        report={sampleIngredientScannerResultsReport}
+        isOffline={false}
+        canGoBackToReview={true}
+        canScanAnotherProduct={true}
+        canSaveResult={true}
+        isSaveAvailableOffline={false}
+        onBackToReview={(draftId) => {
+          if (
+            ingredientInputDraft === null ||
+            ingredientScannerResultContext === null ||
+            draftId !== ingredientInputDraft.draftId ||
+            draftId !== ingredientScannerResultContext.draftId
+          ) {
+            console.log(
+              "Ingredient review return blocked because the draft context is unavailable.",
+            )
+            return
+          }
+
+          setCurrentScreen("ingredient-input-review")
+        }}
+        onScanAnotherProduct={() => {
+          setIngredientScannerSelectedProfileId(
+            ingredientScannerResultContext?.selectedProfileId ?? null,
+          )
+          setIngredientInputDraft(null)
+          setIngredientScannerResultContext(null)
+          setCurrentScreen("ingredient-scanner-entry")
+        }}
+        onSaveResult={(
+          submission: IngredientScannerResultSaveSubmission,
+        ) => {
+          console.log(
+            "Saving ingredient guidance result through future adapter:",
+            submission,
+          )
+        }}
+        onRetryLoad={() => {
+          console.log(
+            "Retrying ingredient guidance result load through future adapter.",
+          )
+        }}
+      />
+    )
+  }
+
   // Ingredient Input Review Screen
   if (currentScreen === "ingredient-input-review") {
     return (
@@ -1978,6 +2154,7 @@ export default function Page() {
             "Submitting reviewed ingredient draft for future guidance route:",
             submission,
           )
+          openIngredientScannerResults(submission)
         }}
         onRetryLoad={() => {
           console.log("Retrying ingredient input review load...")

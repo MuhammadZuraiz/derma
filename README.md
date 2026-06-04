@@ -87,7 +87,7 @@ The demo route controller owns source-aware Back context for routes that can now
 
 Dashboard active-profile context now follows the controller-owned managed-profile selection. Selecting a known managed profile updates the in-memory active opaque profile ID used by the dashboard report, and Dashboard Start new scan passes that currently active profile ID into its callback. Known demo managed-profile labels are also held in controller-owned in-memory fixture state, so switching away from the primary profile and back does not silently reset its saved demo name.
 
-Progress, Orders, and Recent-order details remain visible but disabled because those future routes have not been built yet. The Dashboard ingredient scanner route is enabled and opens `GuestIngredientScannerEntryScreen` with the active managed profile supplied as optional local-profile context.
+Progress, Orders, and Recent-order details remain visible but disabled because those future routes are not integrated into the demo route controller yet. `ProgressTrackingScreen` now exists as a standalone Screen 23 component, but `app/page.tsx` still keeps the Dashboard Progress action disabled. The Dashboard ingredient scanner route is enabled and opens `GuestIngredientScannerEntryScreen` with the active managed profile supplied as optional local-profile context.
 
 The screen preserves the local-first helper copy, `Your profile stays local unless you choose to sync it.`, and positions sync as optional. UV/AQI content remains behind `showEnvironmentalModule`; when the flag is false, environmental payloads are not rendered, and the screen never requests location data or fetches environmental values directly.
 
@@ -216,7 +216,7 @@ Back follows the same async-safe callback pattern as scanner-method actions, inc
 
 The host still owns native camera and picker adapters, manual-entry routing, ingredient extraction, processing, storage policy, selected-profile refresh, profile switching, offline capability, and all onward routing. In the current demo, camera, picker, and manual-entry activations route into `IngredientInputReviewScreen` through controller-owned demo fixtures. Camera and picker adapters remain unimplemented; photo-method text is static host-shaped fixture copy only, not OCR output, and manual entry begins with a blank host-controlled draft.
 
-No persistence, API call, OCR, extraction adapter, camera API call, file input, direct picker access, browser history, routing library, external navigation, affiliate route, marketplace route, account requirement, Screen 22 route, or host-adapter module was introduced.
+No persistence, API call, OCR, extraction adapter, camera API call, file input, direct picker access, browser history, routing library, external navigation, affiliate route, marketplace route, account requirement, direct scanner-entry-to-results skip route, or host-adapter module was introduced. Scanner entry still routes through `IngredientInputReviewScreen` before Screen 22 can open.
 
 ## IngredientInputReviewScreen Integration
 
@@ -230,7 +230,7 @@ Ingredient input review Back -> Scanner entry
 Ingredient input review Change method -> Scanner entry
 Ingredient input review Change profile -> Profile management -> source-aware return to Ingredient input review
 Ingredient input review text change -> controller-owned in-memory raw draft refresh
-Ingredient input review Continue -> future guidance-route log only
+Ingredient input review Continue -> validate controlled in-memory draft context -> IngredientScannerResultsScreen
 ```
 
 The host owns the draft ID, source, source label, optional image preview data, ingredient text, optional local-profile context, extraction status, processing, storage policy, selected-profile refresh, and onward routing. The demo route controller uses fixed opaque draft fixture IDs as callback-only context and keeps the controlled ingredient text in memory only. The screen renders host-supplied ingredient text as a controlled textarea and calls `onIngredientTextChange` with the exact raw textarea value when editing is permitted; it does not keep an independent text draft.
@@ -245,33 +245,82 @@ Offline status is informational. The host controls whether Back, input-method ch
 
 Textarea editing is paused while a discrete route action is pending. During that pause the host-controlled text remains readable, no local textarea draft is introduced, and blocked or pending edit events are protected by an independent programmatic guard. Permitted edits still send the exact raw textarea value unchanged, with no trimming, parsing, normalisation, debounce, or persistence.
 
-Profile-management return preserves the current draft ID, source, optional preview, and raw ingredient text. Continue remains a future guidance-route log only because Screen 22 has not been created.
+Profile-management return preserves the current draft ID, source, optional preview, and raw ingredient text. Continue now preserves the existing submit log, validates that the submitted draft ID and raw ingredient text still match the current controlled in-memory draft, and then opens `IngredientScannerResultsScreen` when the context is usable.
 
-No Screen 22, guidance generation, OCR work, extraction adapter, camera access, picker access, file input, persistence, API, browser history, routing library, external navigation, adapter module, shared component extraction, ingredient parsing, ingredient normalization, product ranking, safety determination, account requirement, store routing, affiliate route, marketplace route, external seller route, sponsored content, iframe, or anchor navigation was introduced. The regression suite lives at `components/ingredient-input-review-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
+No guidance generation, OCR work, extraction adapter, camera access, picker access, file input, persistence, API, browser history, routing library, external navigation, adapter module, shared component extraction, ingredient parsing, ingredient normalization, product ranking, safety determination, account requirement, store routing, affiliate route, marketplace route, external seller route, sponsored content, iframe, anchor navigation, Screen 23, or future route was introduced. The regression suite lives at `components/ingredient-input-review-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
 
 ## IngredientScannerResultsScreen Integration
 
-`IngredientScannerResultsScreen` is Screen 22, the readable ingredient-guidance destination intended to appear after the customer explicitly submits reviewed ingredient text from `IngredientInputReviewScreen`.
+`IngredientScannerResultsScreen` is Screen 22, the readable ingredient-guidance destination after the customer explicitly submits reviewed ingredient text from `IngredientInputReviewScreen`. It is now integrated into `app/page.tsx` through controller-owned in-memory demo fixtures.
 
-Intended route shape:
+Current demo route shape:
 
 ```text
 GuestIngredientScannerEntryScreen
 -> IngredientInputReviewScreen
 -> explicit Continue
 -> IngredientScannerResultsScreen
+
+IngredientScannerResultsScreen
+-> Back to review
+-> IngredientInputReviewScreen
+
+IngredientScannerResultsScreen
+-> Scan another product
+-> GuestIngredientScannerEntryScreen with optional profile context restored
+
+IngredientScannerResultsScreen
+-> Save
+-> future-adapter log only
+
+IngredientScannerResultsScreen
+-> Retry
+-> future-adapter log only
 ```
 
-The screen is guidance-oriented, educational, and not a medical assessment, allergy test, or compatibility guarantee. It is not yet integrated into `app/page.tsx`.
+The screen is guidance-oriented, educational, and not a medical assessment, allergy test, or compatibility guarantee.
 
-The host owns result ID, draft ID, source labels, summary labels, guidance preparation, guidance-item ordering, flag labels, optional profile context, save availability, offline save capability, processing, storage policy, and routing. Opaque result, draft, profile, and item IDs remain callback-only context and are not rendered.
+The host owns result ID, draft ID, source labels, summary labels, guidance preparation, guidance-item ordering, flag labels, optional profile context, save availability, offline save capability, processing, storage policy, and routing. The demo uses fixed opaque result IDs as callback-only context and never generates random or timestamp IDs.
 
-Guidance items render in the received order. The screen does not locally sort, group, rank, filter, calculate ingredient counts, parse ingredient text, normalise ingredient text, split ingredient text, infer safety, infer allergies, infer compatibility, generate product recommendations, or route into the store. `ingredientCountLabel` renders only when supplied by the host.
+Guidance items render in the received order. The route controller supplies a static host-shaped guidance fixture only: Niacinamide, Fragrance, and Retinol. The fixed count label is the literal host-shaped text `3 host-supplied notes`, not a value derived from `guidanceItems.length`. Malformed guidance-list entries degrade into neutral fallback cards without being filtered or reordered. The screen and route controller do not locally parse ingredient text, split ingredient text, sort, group, rank, filter, calculate ingredient counts, infer safety, infer allergies, infer compatibility, generate recommendations, add processing timers, or route into the store.
 
 Optional profile context remains guest-compatible. Missing profile context keeps results readable, malformed optional profile IDs are omitted from Save submissions, and no sign-in or account creation is required.
 
-Empty guidance is a readable state rather than an error. Back to review, Scan another product, optional Save, Retry, offline notice, pending labels, duplicate-activation protection, and callback-rejection toasts are covered by the standalone regression suite.
+Empty guidance is a readable state rather than an error and uses a neutral informational card rather than error styling. Back to review, Scan another product, optional Save, Retry, offline notice, pending labels, duplicate-activation protection, and callback-rejection toasts are covered by the standalone regression suite.
 
-Save behavior is host-owned. Save remains visible, uses a distinct offline capability flag, never persists locally, and only submits usable result/draft context plus an optional usable profile ID.
+Save behavior is host-owned. Save remains visible, uses a distinct offline capability flag, never persists locally, only submits usable result/draft context plus an optional usable profile ID, and does not synthesize `savedLabel`. Retry is also a future-adapter log only and does not fetch.
 
-No API calls, persistence, camera access, picker access, file input, account requirement, affiliate route, marketplace route, external seller route, sponsored content, host-adapter module, route-controller integration, Screen 23, or future route was introduced. The regression suite lives at `components/ingredient-scanner-results-screen.test.tsx`.
+No API calls, persistence, camera access, picker access, file input, external navigation, account requirement, affiliate route, marketplace route, external seller route, sponsored content, host-adapter module, or future route-controller route was introduced in the Screen 22 integration. Screen 23 now exists separately as the standalone `ProgressTrackingScreen` documented below. The Screen 22 regression suite lives at `components/ingredient-scanner-results-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
+
+## ProgressTrackingScreen Integration
+
+`ProgressTrackingScreen` is Screen 23, the future progress-review destination for returning customers who want to review host-supplied scan history and explicitly compare two chosen snapshots. It now exists as a standalone component with its own regression suite:
+
+```text
+HomeDashboardScreen
+-> Progress
+-> ProgressTrackingScreen
+```
+
+The route above is product intent only in this checkpoint. Screen 23 is not integrated into `app/page.tsx`, and the demo Dashboard Progress action remains disabled until a future route-controller integration wires it deliberately.
+
+The screen renders host-owned scan history, optional comparison notes, optional routine prompt copy, image labels, date labels, photo-quality labels, per-action availability, and optional offline status exactly as supplied. The host owns profile identity, scan-history order, comparison selection, snapshot images, comparison metrics, routine prompt/adherence context, storage, processing, persistence, routing, and all callbacks.
+
+Scan entries and comparison metric entries render in the received order. Malformed scan-history entries degrade into neutral fallback snapshot cards without being filtered, reordered, ranked, or hidden. Malformed metric entries degrade into neutral fallback metric rows in place. Missing, whitespace-only, or failed snapshot images render the local `Snapshot image unavailable` placeholder, and replacement image URLs are allowed to retry.
+
+The empty state is readable and informational:
+
+```text
+No progress snapshots yet
+Start a new scan to create a snapshot for future comparisons.
+```
+
+Loading uses polite status semantics, error uses `role="alert"` with Retry outside the alert when supplied, and offline copy is informational only:
+
+```text
+You appear to be offline. Supplied progress snapshots remain readable. The host controls which actions remain available.
+```
+
+Back, Start a new scan, Select baseline, Select comparison, Open report, Open routine, and Retry are all explicit user-activated callbacks. The component uses StrictMode-safe mounted tracking, duplicate-activation protection, action-scoped pending labels, contextual repeated-control accessible names, and callback-rejection toasts. Opaque profile IDs, scan IDs, metric IDs, and routine IDs remain callback-only context and are not rendered manually.
+
+No `app/page.tsx` route integration, host-adapter module, shared component extraction, Screen 24, persistence, API call, camera access, picker access, file input, external navigation, progress inference, comparison calculation, adherence calculation, scan ranking, scan grouping, recommendation generation, affiliate route, marketplace route, external seller route, sponsored content, or medical-monitoring claim was introduced. The standalone regression suite lives at `components/progress-tracking-screen.test.tsx`.

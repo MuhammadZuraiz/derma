@@ -370,6 +370,16 @@ vi.mock("@/components/ingredient-input-review-screen", () => ({
       >
         Ingredient review edit text
       </button>
+      <button
+        onClick={() =>
+          onIngredientTextChange(
+            "  Completely arbitrary label text,\nUnknown entry  ",
+          )
+        }
+        type="button"
+      >
+        Ingredient review edit arbitrary text
+      </button>
       <button onClick={onChangeProfile} type="button">
         Ingredient review change profile
       </button>
@@ -389,11 +399,91 @@ vi.mock("@/components/ingredient-input-review-screen", () => ({
       >
         Ingredient review continue
       </button>
+      <button
+        onClick={() =>
+          onContinue({
+            draftId: "stale-draft-id",
+            ingredientText: report.ingredientText,
+          })
+        }
+        type="button"
+      >
+        Ingredient review continue with stale draft
+      </button>
       <button onClick={onRetryLoad} type="button">
         Ingredient review retry
       </button>
     </section>
   ),
+}))
+
+vi.mock("@/components/ingredient-scanner-results-screen", () => ({
+  default: ({
+    onBackToReview,
+    onRetryLoad,
+    onSaveResult,
+    onScanAnotherProduct,
+    report,
+    state,
+  }: MockProps) => {
+    const saveSubmission = report
+      ? {
+          resultId: report.resultId,
+          draftId: report.draftId,
+          ...(report.selectedProfile
+            ? { profileId: report.selectedProfile.profileId }
+            : {}),
+        }
+      : null
+
+    return (
+      <section data-testid="ingredient-results-screen">
+        <div data-testid="results-state">{state}</div>
+        <div data-testid="results-result-id">{report?.resultId ?? ""}</div>
+        <div data-testid="results-draft-id">{report?.draftId ?? ""}</div>
+        <div data-testid="results-source-label">{report?.sourceLabel ?? ""}</div>
+        <div data-testid="results-summary-label">{report?.summaryLabel ?? ""}</div>
+        <div data-testid="results-count-label">{report?.ingredientCountLabel ?? ""}</div>
+        <div data-testid="results-guidance-item-names">
+          {JSON.stringify(
+            report?.guidanceItems?.map((item: MockProps) => item.name) ?? [],
+          )}
+        </div>
+        <div data-testid="results-selected-profile-id">
+          {report?.selectedProfile?.profileId ?? ""}
+        </div>
+        <div data-testid="results-selected-profile-display-name">
+          {report?.selectedProfile?.displayName ?? ""}
+        </div>
+        <div data-testid="results-mode">
+          {report?.selectedProfile ? "profiled" : "guest"}
+        </div>
+        <div data-testid="results-saved-label">{report?.savedLabel ?? ""}</div>
+        <button
+          onClick={() => onBackToReview(report?.draftId ?? "")}
+          type="button"
+        >
+          Ingredient results back to review
+        </button>
+        <button onClick={onScanAnotherProduct} type="button">
+          Ingredient results scan another
+        </button>
+        <button
+          onClick={() => {
+            if (saveSubmission) {
+              onSaveResult(saveSubmission)
+            }
+          }}
+          type="button"
+        >
+          Ingredient results save
+        </button>
+        <button onClick={onRetryLoad} type="button">
+          Ingredient results retry
+        </button>
+      </section>
+    )
+  },
 }))
 
 vi.mock("@/components/full-report-detail-screen", () => ({
@@ -648,6 +738,25 @@ function getIngredientReviewReport() {
   }
 }
 
+function getIngredientResultsReport() {
+  return {
+    countLabel: screen.getByTestId("results-count-label").textContent ?? "",
+    draftId: screen.getByTestId("results-draft-id").textContent ?? "",
+    guidanceItemNames: getJson("results-guidance-item-names"),
+    mode: screen.getByTestId("results-mode").textContent ?? "",
+    resultId: screen.getByTestId("results-result-id").textContent ?? "",
+    savedLabel: screen.getByTestId("results-saved-label").textContent ?? "",
+    selectedProfileDisplayName:
+      screen.getByTestId("results-selected-profile-display-name").textContent ??
+      "",
+    selectedProfileId:
+      screen.getByTestId("results-selected-profile-id").textContent ?? "",
+    sourceLabel: screen.getByTestId("results-source-label").textContent ?? "",
+    state: screen.getByTestId("results-state").textContent ?? "",
+    summaryLabel: screen.getByTestId("results-summary-label").textContent ?? "",
+  }
+}
+
 function getBodyTextOutsideProfileManagementReport() {
   const renderedOutsideReport = document.body.cloneNode(true) as HTMLElement
   renderedOutsideReport
@@ -667,6 +776,13 @@ async function goToWelcomeManualReview(user: User) {
   expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
 }
 
+async function goToWelcomeManualResults(user: User) {
+  await goToWelcomeManualReview(user)
+  await user.click(screen.getByRole("button", { name: "Ingredient review edit text" }))
+  await user.click(screen.getByRole("button", { name: "Ingredient review continue" }))
+  expect(screen.getByTestId("ingredient-results-screen")).toBeInTheDocument()
+}
+
 async function goToDashboardScannerEntry(user: User) {
   await goToDashboard(user)
   await user.click(screen.getByRole("button", { name: "Open dashboard ingredient scanner" }))
@@ -677,6 +793,12 @@ async function goToDashboardPhotoReview(user: User) {
   await goToDashboardScannerEntry(user)
   await user.click(screen.getByRole("button", { name: "Scanner entry take photo" }))
   expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
+}
+
+async function goToDashboardPhotoResults(user: User) {
+  await goToDashboardPhotoReview(user)
+  await user.click(screen.getByRole("button", { name: "Ingredient review continue" }))
+  expect(screen.getByTestId("ingredient-results-screen")).toBeInTheDocument()
 }
 
 describe("Page route controller", () => {
@@ -1155,7 +1277,7 @@ describe("Page route controller", () => {
     })
   })
 
-  it("keeps guest ingredient review Continue as a future-route log only", async () => {
+  it("routes guest manual ingredient review Continue to static ingredient results", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
     const user = renderPage()
     await goToWelcomeManualReview(user)
@@ -1163,6 +1285,7 @@ describe("Page route controller", () => {
     await user.click(screen.getByRole("button", { name: "Ingredient review edit text" }))
     await user.click(screen.getByRole("button", { name: "Ingredient review continue" }))
 
+    expect(screen.getByTestId("ingredient-results-screen")).toBeInTheDocument()
     expect(logSpy).toHaveBeenCalledWith(
       "Submitting reviewed ingredient draft for future guidance route:",
       {
@@ -1170,11 +1293,18 @@ describe("Page route controller", () => {
         ingredientText: "  Water,\nNiacinamide, Fragrance  ",
       },
     )
-    expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
-    expect(screen.queryByTestId("results-screen")).not.toBeInTheDocument()
+    expect(getIngredientResultsReport()).toMatchObject({
+      countLabel: "3 host-supplied notes",
+      draftId: "ingredient-draft-manual-001",
+      guidanceItemNames: ["Niacinamide", "Fragrance", "Retinol"],
+      mode: "guest",
+      resultId: "ingredient-result-manual-001",
+      selectedProfileId: "",
+      summaryLabel: "Demo host-supplied ingredient notes for the reviewed draft.",
+    })
   })
 
-  it("keeps profiled ingredient review Continue as a future-route log only", async () => {
+  it("routes profiled camera ingredient review Continue to ingredient results", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
     const user = renderPage()
     await goToDashboardPhotoReview(user)
@@ -1189,8 +1319,173 @@ describe("Page route controller", () => {
         profileId: "profile-001",
       },
     )
+    expect(screen.getByTestId("ingredient-results-screen")).toBeInTheDocument()
+    expect(getIngredientResultsReport()).toMatchObject({
+      mode: "profiled",
+      resultId: "ingredient-result-camera-001",
+      selectedProfileDisplayName: "Route Tester",
+      selectedProfileId: "profile-001",
+    })
+  })
+
+  it("routes chosen-photo ingredient review Continue to picker result fixtures", async () => {
+    const user = renderPage()
+    await goToWelcomeScannerEntry(user)
+
+    await user.click(screen.getByRole("button", { name: "Scanner entry choose photo" }))
+    await user.click(screen.getByRole("button", { name: "Ingredient review continue" }))
+
+    expect(screen.getByTestId("ingredient-results-screen")).toBeInTheDocument()
+    expect(getIngredientResultsReport()).toMatchObject({
+      resultId: "ingredient-result-picker-001",
+      sourceLabel: "Demo host selected-label review draft",
+    })
+  })
+
+  it("returns from ingredient results Back to review with draft context intact", async () => {
+    const user = renderPage()
+    await goToDashboardPhotoReview(user)
+    const initialReport = getIngredientReviewReport()
+
+    await user.click(screen.getByRole("button", { name: "Ingredient review continue" }))
+    await user.click(screen.getByRole("button", { name: "Ingredient results back to review" }))
+
     expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
-    expect(screen.queryByTestId("results-screen")).not.toBeInTheDocument()
+    expect(getIngredientReviewReport()).toMatchObject({
+      draftId: initialReport.draftId,
+      ingredientText: initialReport.ingredientText,
+      selectedProfileDisplayName: initialReport.selectedProfileDisplayName,
+      selectedProfileId: initialReport.selectedProfileId,
+      source: initialReport.source,
+      sourceLabel: initialReport.sourceLabel,
+    })
+  })
+
+  it("scans another product from profiled results while preserving managed profile state", async () => {
+    const user = renderPage()
+    await goToDashboardPhotoResults(user)
+
+    await user.click(screen.getByRole("button", { name: "Ingredient results scan another" }))
+
+    expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+    expect(screen.queryByTestId("ingredient-results-screen")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("ingredient-review-screen")).not.toBeInTheDocument()
+    expect(getScannerEntryReport()).toMatchObject({
+      displayName: "Route Tester",
+      mode: "profiled",
+      profileId: "profile-001",
+    })
+
+    await user.click(screen.getByRole("button", { name: "Scanner entry change profile" }))
+    expect(getProfileManagementSummary()).toMatchObject({
+      activeProfileId: "profile-001",
+      activeDisplayName: "Route Tester",
+    })
+
+    await user.click(screen.getByRole("button", { name: "Profile management back" }))
+    await user.click(screen.getByRole("button", { name: "Scanner entry manual entry" }))
+
+    expect(getIngredientReviewReport()).toMatchObject({
+      draftId: "ingredient-draft-manual-001",
+      ingredientText: "",
+      selectedProfileId: "profile-001",
+      source: "manual-entry",
+    })
+  })
+
+  it("keeps guest ingredient results Save as a future-adapter log only", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToWelcomeManualResults(user)
+    const initialReport = getIngredientResultsReport()
+
+    await user.click(screen.getByRole("button", { name: "Ingredient results save" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Saving ingredient guidance result through future adapter:",
+      {
+        resultId: "ingredient-result-manual-001",
+        draftId: "ingredient-draft-manual-001",
+      },
+    )
+    expect(screen.getByTestId("ingredient-results-screen")).toBeInTheDocument()
+    expect(getIngredientResultsReport()).toMatchObject({
+      ...initialReport,
+      savedLabel: "",
+    })
+  })
+
+  it("keeps profiled ingredient results Save as a future-adapter log only", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToDashboardPhotoResults(user)
+
+    await user.click(screen.getByRole("button", { name: "Ingredient results save" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Saving ingredient guidance result through future adapter:",
+      {
+        resultId: "ingredient-result-camera-001",
+        draftId: "ingredient-draft-camera-001",
+        profileId: "profile-001",
+      },
+    )
+    expect(screen.getByTestId("ingredient-results-screen")).toBeInTheDocument()
+    expect(getIngredientResultsReport().savedLabel).toBe("")
+  })
+
+  it("keeps ingredient results Retry as a future-adapter log only", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToWelcomeManualResults(user)
+
+    await user.click(screen.getByRole("button", { name: "Ingredient results retry" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Retrying ingredient guidance result load through future adapter.",
+    )
+    expect(screen.getByTestId("ingredient-results-screen")).toBeInTheDocument()
+  })
+
+  it("blocks stale ingredient review Continue without replacing result context", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToWelcomeManualReview(user)
+
+    await user.click(screen.getByRole("button", { name: "Ingredient review edit text" }))
+    await user.click(
+      screen.getByRole("button", {
+        name: "Ingredient review continue with stale draft",
+      }),
+    )
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Ingredient result route blocked because the reviewed draft context is unavailable.",
+    )
+    expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
+    expect(screen.queryByTestId("ingredient-results-screen")).not.toBeInTheDocument()
+  })
+
+  it("keeps ingredient results guidance static for arbitrary reviewed text", async () => {
+    const user = renderPage()
+    await goToWelcomeManualReview(user)
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Ingredient review edit arbitrary text",
+      }),
+    )
+    expect(getIngredientReviewReport().ingredientText).toBe(
+      "  Completely arbitrary label text,\nUnknown entry  ",
+    )
+
+    await user.click(screen.getByRole("button", { name: "Ingredient review continue" }))
+
+    expect(getIngredientResultsReport()).toMatchObject({
+      countLabel: "3 host-supplied notes",
+      guidanceItemNames: ["Niacinamide", "Fragrance", "Retinol"],
+      resultId: "ingredient-result-manual-001",
+    })
   })
 
   it("keeps ingredient review Retry as a future-adapter log", async () => {
@@ -1238,6 +1533,92 @@ describe("Page route controller", () => {
       expect(screen.getByTestId("ingredient-review-screen")).toBeInTheDocument()
       expect(screen.queryByTestId("screen-22")).not.toBeInTheDocument()
     } finally {
+      if (originalMediaDevices) {
+        Object.defineProperty(window.navigator, "mediaDevices", originalMediaDevices)
+      } else {
+        delete (window.navigator as unknown as { mediaDevices?: unknown }).mediaDevices
+      }
+
+      if (originalFileReader) {
+        Object.defineProperty(globalThis, "FileReader", originalFileReader)
+      } else {
+        delete (globalThis as { FileReader?: unknown }).FileReader
+      }
+    }
+  })
+
+  it("keeps ingredient results integration inside adapter boundaries", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const fetchSpy = vi.fn()
+    const storageSet = vi.spyOn(Storage.prototype, "setItem")
+    const storageGet = vi.spyOn(Storage.prototype, "getItem")
+    const indexedDbOpen = vi.fn()
+    const originalFetch = globalThis.fetch
+    const originalIndexedDb = Object.getOwnPropertyDescriptor(window, "indexedDB")
+    const originalMediaDevices = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "mediaDevices",
+    )
+    const originalFileReader = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "FileReader",
+    )
+    const mediaDevices = {
+      getUserMedia: vi.fn(),
+    }
+    const FileReaderSpy = vi.fn()
+
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: fetchSpy,
+    })
+    Object.defineProperty(window, "indexedDB", {
+      configurable: true,
+      value: { open: indexedDbOpen },
+    })
+    Object.defineProperty(window.navigator, "mediaDevices", {
+      configurable: true,
+      value: mediaDevices,
+    })
+    Object.defineProperty(globalThis, "FileReader", {
+      configurable: true,
+      value: FileReaderSpy,
+    })
+
+    try {
+      const user = renderPage()
+      await goToWelcomeManualResults(user)
+      await user.click(screen.getByRole("button", { name: "Ingredient results save" }))
+      await user.click(screen.getByRole("button", { name: "Ingredient results retry" }))
+      await user.click(screen.getByRole("button", { name: "Ingredient results scan another" }))
+
+      expect(fetchSpy).not.toHaveBeenCalled()
+      expect(storageSet).not.toHaveBeenCalled()
+      expect(storageGet).not.toHaveBeenCalled()
+      expect(indexedDbOpen).not.toHaveBeenCalled()
+      expect(mediaDevices.getUserMedia).not.toHaveBeenCalled()
+      expect(FileReaderSpy).not.toHaveBeenCalled()
+      expect(document.querySelector('input[type="file"]')).toBeNull()
+      expect(screen.queryByTestId("screen-23")).not.toBeInTheDocument()
+      expect(
+        logSpy.mock.calls.some(([message]) => message === "Opening photo picker..."),
+      ).toBe(false)
+    } finally {
+      if (originalFetch) {
+        Object.defineProperty(globalThis, "fetch", {
+          configurable: true,
+          value: originalFetch,
+        })
+      } else {
+        delete (globalThis as { fetch?: unknown }).fetch
+      }
+
+      if (originalIndexedDb) {
+        Object.defineProperty(window, "indexedDB", originalIndexedDb)
+      } else {
+        delete (window as unknown as { indexedDB?: unknown }).indexedDB
+      }
+
       if (originalMediaDevices) {
         Object.defineProperty(window.navigator, "mediaDevices", originalMediaDevices)
       } else {

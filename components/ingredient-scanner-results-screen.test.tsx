@@ -129,7 +129,7 @@ function expectTextOrder(...items: string[]) {
   let previousIndex = -1;
 
   for (const item of items) {
-    const nextIndex = bodyText.indexOf(item);
+    const nextIndex = bodyText.indexOf(item, previousIndex + 1);
     expect(nextIndex).toBeGreaterThan(previousIndex);
     previousIndex = nextIndex;
   }
@@ -147,6 +147,22 @@ function expectOpaqueIdsNotRendered(container: HTMLElement) {
     expect(container.textContent).not.toContain(itemId);
     expect(container.innerHTML).not.toContain(itemId);
   }
+}
+
+function expectNeutralEmptyCard() {
+  const card = screen.getByTestId("empty-guidance-card");
+
+  expect(card).not.toHaveAttribute("role", "alert");
+  expect(card).toHaveClass("border-[var(--dl-parchment)]");
+  expect(card).toHaveClass("bg-[var(--dl-surface-soft)]");
+  expect(card).not.toHaveClass("bg-[var(--dl-error-surface)]");
+  expect(card).not.toHaveClass("text-[var(--dl-error-text)]");
+  expect(within(card).getByText(copy.emptyTitle)).toHaveClass(
+    "text-[var(--dl-bark)]",
+  );
+  expect(within(card).getByText(copy.emptySupporting)).toHaveClass(
+    "text-[var(--dl-text-secondary)]",
+  );
 }
 
 afterEach(() => {
@@ -339,7 +355,7 @@ describe("IngredientScannerResultsScreen core rendering", () => {
   });
 
   it("uses safe fallbacks for malformed guidance item text", () => {
-    renderScreen({
+    const { container } = renderScreen({
       report: {
         ...defaultReport,
         guidanceItems: [
@@ -356,6 +372,60 @@ describe("IngredientScannerResultsScreen core rendering", () => {
     expect(screen.getByText(copy.unnamedIngredient)).toBeVisible();
     expect(screen.getByText(copy.unavailableFlag)).toBeVisible();
     expect(screen.getByText(copy.unavailableSummary)).toBeVisible();
+    expect(container.textContent).not.toContain("malformed-item");
+  });
+
+  it("renders malformed guidance entries as neutral fallback cards in received order", () => {
+    const { container } = renderScreen({
+      report: {
+        ...defaultReport,
+        guidanceItems: [
+          {
+            itemId: "valid-before",
+            name: "Valid before",
+            flagLabel: "Host label before",
+            summary: "Host summary before",
+          },
+          null,
+          undefined,
+          "unexpected",
+          42,
+          {
+            itemId: "valid-after",
+            name: "Valid after",
+            flagLabel: "Host label after",
+            summary: "Host summary after",
+          },
+        ] as unknown as IngredientScannerGuidanceItem[],
+      },
+    });
+    const listItems = screen.getAllByRole("listitem");
+
+    expect(listItems).toHaveLength(6);
+    expect(within(listItems[0]).getByText("Valid before")).toBeVisible();
+    expect(within(listItems[5]).getByText("Valid after")).toBeVisible();
+
+    for (const fallbackItem of listItems.slice(1, 5)) {
+      expect(within(fallbackItem).getByText(copy.unnamedIngredient)).toBeVisible();
+      expect(within(fallbackItem).getByText(copy.unavailableFlag)).toBeVisible();
+      expect(within(fallbackItem).getByText(copy.unavailableSummary)).toBeVisible();
+      expect(fallbackItem).toHaveAttribute("data-tone", "neutral");
+    }
+
+    expectTextOrder(
+      "Valid before",
+      copy.unnamedIngredient,
+      copy.unnamedIngredient,
+      copy.unnamedIngredient,
+      copy.unnamedIngredient,
+      "Valid after",
+    );
+    expect(container.textContent).not.toContain("valid-before");
+    expect(container.textContent).not.toContain("valid-after");
+    expect(container.textContent).not.toContain("null");
+    expect(container.textContent).not.toContain("undefined");
+    expect(container.textContent).not.toContain("unexpected");
+    expect(container.textContent).not.toContain("42");
   });
 
   it("renders optional category and supporting labels only when usable", () => {
@@ -420,6 +490,19 @@ describe("IngredientScannerResultsScreen empty experience", () => {
     expect(getButton(copy.backToReview)).toBeVisible();
     expect(getButton(copy.scanAnother)).toBeVisible();
     expect(getButton(copy.saveResult)).toBeVisible();
+    expectNeutralEmptyCard();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("renders ready empty-array guidance as a neutral card", () => {
+    renderScreen({
+      report: {
+        ...defaultReport,
+        guidanceItems: [],
+      },
+    });
+
+    expectNeutralEmptyCard();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -435,6 +518,13 @@ describe("IngredientScannerResultsScreen empty experience", () => {
 
     expect(getButton(copy.saveBlocked)).toBeVisible();
     expect(getButton(copy.saveBlocked)).toBeDisabled();
+  });
+
+  it("keeps the error experience visually and semantically distinct", () => {
+    renderScreen({ state: "error" });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(copy.errorSupporting);
+    expect(screen.queryByTestId("empty-guidance-card")).not.toBeInTheDocument();
   });
 });
 
