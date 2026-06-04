@@ -218,6 +218,132 @@ vi.mock("@/components/home-dashboard-screen", () => ({
   ),
 }))
 
+vi.mock("@/components/progress-tracking-screen", () => ({
+  default: ({
+    onBack,
+    onOpenReport,
+    onOpenRoutine,
+    onRetryLoad,
+    onSelectBaseline,
+    onSelectComparison,
+    onStartNewScan,
+    report,
+  }: MockProps) => {
+    const scans = report?.scans ?? []
+    const selectedBaseline = scans.find(
+      (scan: MockProps) => scan.isBaselineSelected,
+    )
+    const selectedComparison = scans.find(
+      (scan: MockProps) => scan.isComparisonSelected,
+    )
+
+    return (
+      <section data-testid="progress-tracking-screen">
+        <div data-testid="progress-profile-id">
+          {report?.profile?.profileId ?? ""}
+        </div>
+        <div data-testid="progress-display-name">
+          {report?.profile?.displayName ?? ""}
+        </div>
+        <div data-testid="progress-scan-ids">
+          {JSON.stringify(scans.map((scan: MockProps) => scan.scanId))}
+        </div>
+        <div data-testid="progress-selected-baseline-id">
+          {selectedBaseline?.scanId ?? ""}
+        </div>
+        <div data-testid="progress-selected-comparison-id">
+          {selectedComparison?.scanId ?? ""}
+        </div>
+        <div data-testid="progress-comparison-baseline-id">
+          {report?.comparison?.baselineScanId ?? ""}
+        </div>
+        <div data-testid="progress-comparison-comparison-id">
+          {report?.comparison?.comparisonScanId ?? ""}
+        </div>
+        <div data-testid="progress-comparison-heading">
+          {report?.comparison?.headingLabel ?? ""}
+        </div>
+        <div data-testid="progress-metric-labels">
+          {JSON.stringify(
+            report?.comparison?.metrics?.map(
+              (metric: MockProps) => metric.label,
+            ) ?? [],
+          )}
+        </div>
+        <div data-testid="progress-routine-id">
+          {report?.routinePrompt?.routineId ?? ""}
+        </div>
+        <button onClick={onBack} type="button">
+          Progress back
+        </button>
+        <button
+          onClick={() => onStartNewScan(report?.profile?.profileId ?? "")}
+          type="button"
+        >
+          Progress start new scan
+        </button>
+        <button
+          onClick={() => onStartNewScan("stale-profile-id")}
+          type="button"
+        >
+          Progress start new scan with stale profile
+        </button>
+        <button
+          onClick={() => onSelectBaseline?.("progress-scan-001")}
+          type="button"
+        >
+          Progress select June baseline
+        </button>
+        <button
+          onClick={() => onSelectBaseline?.("progress-scan-003")}
+          type="button"
+        >
+          Progress select August baseline
+        </button>
+        <button
+          onClick={() => onSelectComparison?.("progress-scan-002")}
+          type="button"
+        >
+          Progress select July comparison
+        </button>
+        <button
+          onClick={() => onSelectComparison?.("progress-scan-003")}
+          type="button"
+        >
+          Progress select August comparison
+        </button>
+        <button
+          onClick={() => onOpenReport?.("progress-scan-003")}
+          type="button"
+        >
+          Progress open August report
+        </button>
+        <button
+          onClick={() => onOpenReport?.("progress-scan-unknown")}
+          type="button"
+        >
+          Progress open unknown report
+        </button>
+        <button
+          onClick={() => onOpenRoutine?.(report?.routinePrompt?.routineId ?? "")}
+          type="button"
+        >
+          Progress open routine
+        </button>
+        <button
+          onClick={() => onOpenRoutine?.("routine-unknown")}
+          type="button"
+        >
+          Progress open unknown routine
+        </button>
+        <button onClick={onRetryLoad} type="button">
+          Progress retry
+        </button>
+      </section>
+    )
+  },
+}))
+
 vi.mock("@/components/profile-switcher-and-management-screen", () => ({
   default: ({
     canAddProfile,
@@ -757,6 +883,26 @@ function getIngredientResultsReport() {
   }
 }
 
+function getProgressReport() {
+  return {
+    comparisonBaselineId:
+      screen.getByTestId("progress-comparison-baseline-id").textContent ?? "",
+    comparisonComparisonId:
+      screen.getByTestId("progress-comparison-comparison-id").textContent ?? "",
+    comparisonHeading:
+      screen.getByTestId("progress-comparison-heading").textContent ?? "",
+    displayName: screen.getByTestId("progress-display-name").textContent ?? "",
+    metricLabels: getJson("progress-metric-labels"),
+    profileId: screen.getByTestId("progress-profile-id").textContent ?? "",
+    routineId: screen.getByTestId("progress-routine-id").textContent ?? "",
+    scanIds: getJson("progress-scan-ids"),
+    selectedBaselineId:
+      screen.getByTestId("progress-selected-baseline-id").textContent ?? "",
+    selectedComparisonId:
+      screen.getByTestId("progress-selected-comparison-id").textContent ?? "",
+  }
+}
+
 function getBodyTextOutsideProfileManagementReport() {
   const renderedOutsideReport = document.body.cloneNode(true) as HTMLElement
   renderedOutsideReport
@@ -799,6 +945,12 @@ async function goToDashboardPhotoResults(user: User) {
   await goToDashboardPhotoReview(user)
   await user.click(screen.getByRole("button", { name: "Ingredient review continue" }))
   expect(screen.getByTestId("ingredient-results-screen")).toBeInTheDocument()
+}
+
+async function goToProgress(user: User) {
+  await goToDashboard(user)
+  await user.click(screen.getByRole("button", { name: "Dashboard open progress" }))
+  expect(screen.getByTestId("progress-tracking-screen")).toBeInTheDocument()
 }
 
 describe("Page route controller", () => {
@@ -921,6 +1073,331 @@ describe("Page route controller", () => {
     await user.click(screen.getByRole("button", { name: "Dashboard open store" }))
 
     expect(screen.getByTestId("store-screen")).toBeInTheDocument()
+  })
+
+  it("enables Dashboard Progress while keeping order routes blocked", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    expect(screen.getByRole("button", { name: "Dashboard open progress" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Dashboard open orders" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Dashboard open recent order" })).toBeDisabled()
+  })
+
+  it("routes Dashboard Progress to progress tracking and Back to dashboard", async () => {
+    const user = renderPage()
+    await goToProgress(user)
+
+    await user.click(screen.getByRole("button", { name: "Progress back" }))
+
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+  })
+
+  it("passes the active managed profile context into Progress", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+    await user.click(screen.getByRole("button", { name: "Profile management select Maya" }))
+    await user.click(screen.getByRole("button", { name: "Dashboard open progress" }))
+
+    expect(getProgressReport()).toMatchObject({
+      profileId: "profile-002",
+      displayName: "Maya",
+    })
+  })
+
+  it("refreshes the selected Progress baseline in memory without reordering scans", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToProgress(user)
+
+    await user.click(screen.getByRole("button", { name: "Progress select August baseline" }))
+
+    expect(screen.getByTestId("progress-tracking-screen")).toBeInTheDocument()
+    expect(getProgressReport()).toMatchObject({
+      selectedBaselineId: "progress-scan-003",
+      comparisonBaselineId: "progress-scan-003",
+      scanIds: [
+        "progress-scan-001",
+        "progress-scan-002",
+        "progress-scan-003",
+      ],
+    })
+    expect(logSpy).toHaveBeenCalledWith(
+      "Selecting progress baseline snapshot:",
+      "progress-scan-003",
+    )
+  })
+
+  it("refreshes the selected Progress comparison in memory and allows matching selections", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToProgress(user)
+
+    await user.click(screen.getByRole("button", { name: "Progress select August baseline" }))
+    await user.click(screen.getByRole("button", { name: "Progress select August comparison" }))
+
+    expect(screen.getByTestId("progress-tracking-screen")).toBeInTheDocument()
+    expect(getProgressReport()).toMatchObject({
+      selectedBaselineId: "progress-scan-003",
+      selectedComparisonId: "progress-scan-003",
+      comparisonComparisonId: "progress-scan-003",
+    })
+    expect(logSpy).toHaveBeenCalledWith(
+      "Selecting progress comparison snapshot:",
+      "progress-scan-003",
+    )
+  })
+
+  it("keeps Progress comparison metrics static after selection refreshes", async () => {
+    const user = renderPage()
+    await goToProgress(user)
+
+    await user.click(screen.getByRole("button", { name: "Progress select August baseline" }))
+    await user.click(screen.getByRole("button", { name: "Progress select August comparison" }))
+
+    expect(getProgressReport()).toMatchObject({
+      metricLabels: ["Texture note", "Comfort note"],
+      comparisonHeading:
+        "Host-supplied comparison for explicitly selected snapshots",
+    })
+    expect(document.body).not.toHaveTextContent(/calculated trend/i)
+    expect(document.body).not.toHaveTextContent(/score/i)
+    expect(document.body).not.toHaveTextContent(/delta/i)
+    expect(document.body).not.toHaveTextContent(/adherence/i)
+    expect(document.body).not.toHaveTextContent(/improvement/i)
+    expect(document.body).not.toHaveTextContent(/deterioration/i)
+  })
+
+  it("returns from Progress Start new scan image source Back to Progress", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToProgress(user)
+
+    await user.click(screen.getByRole("button", { name: "Progress start new scan" }))
+    expect(screen.getByTestId("image-source-screen")).toBeInTheDocument()
+    expect(logSpy).toHaveBeenCalledWith(
+      "Opening progress scan setup for profile:",
+      "profile-001",
+    )
+
+    await user.click(screen.getByRole("button", { name: "Image source back" }))
+    expect(screen.getByTestId("progress-tracking-screen")).toBeInTheDocument()
+  })
+
+  it("blocks Progress Start new scan when profile context is stale", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToProgress(user)
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Progress start new scan with stale profile",
+      }),
+    )
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Progress scan setup blocked because the active profile context is unavailable.",
+    )
+    expect(screen.getByTestId("progress-tracking-screen")).toBeInTheDocument()
+    expect(screen.queryByTestId("image-source-screen")).not.toBeInTheDocument()
+  })
+
+  it("returns from Progress Open report results Close to Progress", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToProgress(user)
+
+    await user.click(screen.getByRole("button", { name: "Progress open August report" }))
+    expect(screen.getByTestId("results-screen")).toBeInTheDocument()
+    expect(logSpy).toHaveBeenCalledWith(
+      "Opening progress snapshot report:",
+      "progress-scan-003",
+    )
+
+    await user.click(screen.getByRole("button", { name: "Close results" }))
+    expect(screen.getByTestId("progress-tracking-screen")).toBeInTheDocument()
+  })
+
+  it("keeps Dashboard latest-report results Close returning to Dashboard", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard open latest report" }))
+    expect(screen.getByTestId("results-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Close results" }))
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+  })
+
+  it("blocks unknown Progress report IDs without replacing the route", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToProgress(user)
+
+    await user.click(screen.getByRole("button", { name: "Progress open unknown report" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Progress report route failed closed:",
+      "progress-scan-unknown",
+    )
+    expect(screen.getByTestId("progress-tracking-screen")).toBeInTheDocument()
+    expect(screen.queryByTestId("results-screen")).not.toBeInTheDocument()
+  })
+
+  it("returns from Progress routine Back to Progress", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToProgress(user)
+
+    await user.click(screen.getByRole("button", { name: "Progress open routine" }))
+    expect(screen.getByTestId("routine-screen")).toBeInTheDocument()
+    expect(logSpy).toHaveBeenCalledWith("Opening progress routine:", "routine-001")
+
+    await user.click(screen.getByRole("button", { name: "Routine back" }))
+    expect(screen.getByTestId("progress-tracking-screen")).toBeInTheDocument()
+  })
+
+  it("blocks unknown Progress routine IDs without replacing the route", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToProgress(user)
+
+    await user.click(screen.getByRole("button", { name: "Progress open unknown routine" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Progress routine route failed closed:",
+      "routine-unknown",
+    )
+    expect(screen.getByTestId("progress-tracking-screen")).toBeInTheDocument()
+    expect(screen.queryByTestId("routine-screen")).not.toBeInTheDocument()
+  })
+
+  it("keeps Progress Retry as a future-adapter log only", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToProgress(user)
+
+    await user.click(screen.getByRole("button", { name: "Progress retry" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Retrying progress tracking load through future adapter.",
+    )
+    expect(screen.getByTestId("progress-tracking-screen")).toBeInTheDocument()
+  })
+
+  it("keeps Progress integration inside adapter and future-route boundaries", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const fetchSpy = vi.fn()
+    const storageSet = vi.spyOn(Storage.prototype, "setItem")
+    const indexedDbOpen = vi.fn()
+    const originalCookie = document.cookie
+    const originalFetch = globalThis.fetch
+    const originalGeolocation = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "geolocation",
+    )
+    const originalIndexedDb = Object.getOwnPropertyDescriptor(window, "indexedDB")
+    const originalMediaDevices = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "mediaDevices",
+    )
+    const originalFileReader = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "FileReader",
+    )
+    const geolocation = {
+      getCurrentPosition: vi.fn(),
+      watchPosition: vi.fn(),
+    }
+    const mediaDevices = {
+      getUserMedia: vi.fn(),
+    }
+    const FileReaderSpy = vi.fn()
+
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: fetchSpy,
+    })
+    Object.defineProperty(window, "indexedDB", {
+      configurable: true,
+      value: { open: indexedDbOpen },
+    })
+    Object.defineProperty(window.navigator, "geolocation", {
+      configurable: true,
+      value: geolocation,
+    })
+    Object.defineProperty(window.navigator, "mediaDevices", {
+      configurable: true,
+      value: mediaDevices,
+    })
+    Object.defineProperty(globalThis, "FileReader", {
+      configurable: true,
+      value: FileReaderSpy,
+    })
+
+    try {
+      const user = renderPage()
+      await goToProgress(user)
+      logSpy.mockClear()
+
+      await user.click(screen.getByRole("button", { name: "Progress select August baseline" }))
+      await user.click(screen.getByRole("button", { name: "Progress select August comparison" }))
+      await user.click(screen.getByRole("button", { name: "Progress open August report" }))
+      await user.click(screen.getByRole("button", { name: "Close results" }))
+      await user.click(screen.getByRole("button", { name: "Progress open routine" }))
+      await user.click(screen.getByRole("button", { name: "Routine back" }))
+      await user.click(screen.getByRole("button", { name: "Progress start new scan" }))
+
+      expect(fetchSpy).not.toHaveBeenCalled()
+      expect(storageSet).not.toHaveBeenCalled()
+      expect(indexedDbOpen).not.toHaveBeenCalled()
+      expect(document.cookie).toBe(originalCookie)
+      expect(geolocation.getCurrentPosition).not.toHaveBeenCalled()
+      expect(geolocation.watchPosition).not.toHaveBeenCalled()
+      expect(mediaDevices.getUserMedia).not.toHaveBeenCalled()
+      expect(FileReaderSpy).not.toHaveBeenCalled()
+      expect(document.querySelector('input[type="file"]')).toBeNull()
+      expect(screen.queryByTestId("store-screen")).not.toBeInTheDocument()
+      expect(screen.queryByTestId("screen-24")).not.toBeInTheDocument()
+      expect(
+        logSpy.mock.calls.some(([message]) => message === "Opening photo picker..."),
+      ).toBe(false)
+    } finally {
+      if (originalFetch) {
+        Object.defineProperty(globalThis, "fetch", {
+          configurable: true,
+          value: originalFetch,
+        })
+      } else {
+        delete (globalThis as { fetch?: unknown }).fetch
+      }
+
+      if (originalIndexedDb) {
+        Object.defineProperty(window, "indexedDB", originalIndexedDb)
+      } else {
+        delete (window as unknown as { indexedDB?: unknown }).indexedDB
+      }
+
+      if (originalGeolocation) {
+        Object.defineProperty(window.navigator, "geolocation", originalGeolocation)
+      } else {
+        delete (window.navigator as unknown as { geolocation?: unknown }).geolocation
+      }
+
+      if (originalMediaDevices) {
+        Object.defineProperty(window.navigator, "mediaDevices", originalMediaDevices)
+      } else {
+        delete (window.navigator as unknown as { mediaDevices?: unknown }).mediaDevices
+      }
+
+      if (originalFileReader) {
+        Object.defineProperty(globalThis, "FileReader", originalFileReader)
+      } else {
+        delete (globalThis as { FileReader?: unknown }).FileReader
+      }
+    }
   })
 
   it("returns from dashboard Start new scan image source Back to the dashboard", async () => {
@@ -1765,7 +2242,7 @@ describe("Page route controller", () => {
     expect(screen.getByTestId("routine-screen")).toBeInTheDocument()
   })
 
-  it("passes host-owned dashboard fixture data and blocks future routes", async () => {
+  it("passes host-owned dashboard fixture data and keeps future order routes blocked", async () => {
     const user = renderPage()
     await goToDashboard(user)
 
@@ -1773,14 +2250,14 @@ describe("Page route controller", () => {
     expect(props).toMatchObject({
       canOpenGuestScanner: true,
       canOpenOrders: false,
-      canOpenProgress: false,
+      canOpenProgress: true,
       canOpenRecentOrder: false,
       isGuestScannerAvailableOffline: false,
       showEnvironmentalModule: false,
     })
 
     expect(screen.getByRole("button", { name: "Open dashboard ingredient scanner" })).toBeEnabled()
-    expect(screen.getByRole("button", { name: "Dashboard open progress" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Dashboard open progress" })).toBeEnabled()
     expect(screen.getByRole("button", { name: "Dashboard open orders" })).toBeDisabled()
     expect(screen.getByRole("button", { name: "Dashboard open recent order" })).toBeDisabled()
 

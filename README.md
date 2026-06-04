@@ -80,14 +80,15 @@ Change profile -> ProfileSwitcherAndManagementScreen
 Latest report -> ResultsSummaryScreen
 Active routine -> RoutineRecommendationsScreen
 Ingredient scanner -> GuestIngredientScannerEntryScreen
+Progress -> ProgressTrackingScreen
 Store -> DermaLensStoreRoutineCollectionScreen
 ```
 
-The demo route controller owns source-aware Back context for routes that can now be opened from more than one place. Dashboard-origin actions set Back to the dashboard for Start new scan, Change profile, Active routine, and Store. Non-dashboard entries reset their local sources: consent keeps profile Back on Privacy consent, first-time profile save keeps image-source Back on Profile setup, profile-management Add profile keeps image-source Back on Profile management after Save, results-summary routine entry returns to Results summary, full-report routine entry returns to Full report, routine store entry returns to Routine, and Continue shopping resets Store Back to Routine.
+The demo route controller owns source-aware Back context for routes that can now be opened from more than one place. Dashboard-origin actions set Back to the dashboard for Start new scan, Change profile, Active routine, and Store. Progress-origin actions set Back to Progress tracking for Start new scan, Open report, and Open routine. Non-dashboard entries reset their local sources: consent keeps profile Back on Privacy consent, first-time profile save keeps image-source Back on Profile setup, profile-management Add profile keeps image-source Back on Profile management after Save, results-summary routine entry returns to Results summary, full-report routine entry returns to Full report, routine store entry returns to Routine, and Continue shopping resets Store Back to Routine.
 
 Dashboard active-profile context now follows the controller-owned managed-profile selection. Selecting a known managed profile updates the in-memory active opaque profile ID used by the dashboard report, and Dashboard Start new scan passes that currently active profile ID into its callback. Known demo managed-profile labels are also held in controller-owned in-memory fixture state, so switching away from the primary profile and back does not silently reset its saved demo name.
 
-Progress, Orders, and Recent-order details remain visible but disabled because those future routes are not integrated into the demo route controller yet. `ProgressTrackingScreen` now exists as a standalone Screen 23 component, but `app/page.tsx` still keeps the Dashboard Progress action disabled. The Dashboard ingredient scanner route is enabled and opens `GuestIngredientScannerEntryScreen` with the active managed profile supplied as optional local-profile context.
+Dashboard Progress is now enabled and opens `ProgressTrackingScreen` with the active managed profile supplied as host-shaped progress context. Orders and Recent-order details remain visible but disabled because those future routes are not integrated into the demo route controller yet. The Dashboard ingredient scanner route is enabled and opens `GuestIngredientScannerEntryScreen` with the active managed profile supplied as optional local-profile context.
 
 The screen preserves the local-first helper copy, `Your profile stays local unless you choose to sync it.`, and positions sync as optional. UV/AQI content remains behind `showEnvironmentalModule`; when the flag is false, environmental payloads are not rendered, and the screen never requests location data or fetches environmental values directly.
 
@@ -290,23 +291,55 @@ Empty guidance is a readable state rather than an error and uses a neutral infor
 
 Save behavior is host-owned. Save remains visible, uses a distinct offline capability flag, never persists locally, only submits usable result/draft context plus an optional usable profile ID, and does not synthesize `savedLabel`. Retry is also a future-adapter log only and does not fetch.
 
-No API calls, persistence, camera access, picker access, file input, external navigation, account requirement, affiliate route, marketplace route, external seller route, sponsored content, host-adapter module, or future route-controller route was introduced in the Screen 22 integration. Screen 23 now exists separately as the standalone `ProgressTrackingScreen` documented below. The Screen 22 regression suite lives at `components/ingredient-scanner-results-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
+No API calls, persistence, camera access, picker access, file input, external navigation, account requirement, affiliate route, marketplace route, external seller route, sponsored content, host-adapter module, or future route-controller route was introduced in the Screen 22 integration. Screen 23 is integrated separately as `ProgressTrackingScreen`, documented below. The Screen 22 regression suite lives at `components/ingredient-scanner-results-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
 
 ## ProgressTrackingScreen Integration
 
-`ProgressTrackingScreen` is Screen 23, the future progress-review destination for returning customers who want to review host-supplied scan history and explicitly compare two chosen snapshots. It now exists as a standalone component with its own regression suite:
+`ProgressTrackingScreen` is Screen 23, the progress-review destination for returning customers who want to review host-supplied scan history and explicitly compare two chosen snapshots. It is now integrated into `app/page.tsx` from Dashboard Progress and still has its own standalone regression suite.
+
+Current demo route shape:
 
 ```text
 HomeDashboardScreen
 -> Progress
 -> ProgressTrackingScreen
-```
 
-The route above is product intent only in this checkpoint. Screen 23 is not integrated into `app/page.tsx`, and the demo Dashboard Progress action remains disabled until a future route-controller integration wires it deliberately.
+ProgressTrackingScreen
+-> Back
+-> HomeDashboardScreen
+
+ProgressTrackingScreen
+-> Start new scan
+-> ImageSourceSelectionScreen
+-> Back
+-> ProgressTrackingScreen
+
+ProgressTrackingScreen
+-> Open report
+-> ResultsSummaryScreen
+-> Close
+-> ProgressTrackingScreen
+
+ProgressTrackingScreen
+-> Open routine
+-> RoutineRecommendationsScreen
+-> Back
+-> ProgressTrackingScreen
+```
 
 The screen renders host-owned scan history, optional comparison notes, optional routine prompt copy, image labels, date labels, photo-quality labels, per-action availability, and optional offline status exactly as supplied. The host owns profile identity, scan-history order, comparison selection, snapshot images, comparison metrics, routine prompt/adherence context, storage, processing, persistence, routing, and all callbacks.
 
-Scan entries and comparison metric entries render in the received order. Malformed scan-history entries degrade into neutral fallback snapshot cards without being filtered, reordered, ranked, or hidden. Malformed metric entries degrade into neutral fallback metric rows in place. Missing, whitespace-only, or failed snapshot images render the local `Snapshot image unavailable` placeholder, and replacement image URLs are allowed to retry.
+The demo controller uses fixed host-shaped scan history and comparison fixtures only. Baseline and comparison selection refresh controller-owned in-memory demo state so the selected IDs in the report can update after explicit user actions. The scan order remains fixed and host-shaped, comparison metrics remain fixed static host-shaped fixtures, and the controller does not derive metrics from selected scans.
+
+Report opening uses the existing `ResultsSummaryScreen` demo fixture only; a future adapter owns real selected-snapshot report retrieval. Results-summary Close is source-aware for Dashboard latest report, completed analysis results, and Progress opened reports.
+
+The global report-route capability is `canOpenReports`, while each scan card still uses its own `scan.canOpenReport` field. Open report is enabled only when the global route is available, the per-scan flag is not false, the scan ID is uniquely usable in the received history, the callback exists, and no operation is pending.
+
+Scan entries and comparison metric entries render in the received order. Scan cards are never filtered or reordered. Malformed scan-history entries degrade into neutral fallback snapshot cards without being ranked or hidden. Duplicated usable-looking scan IDs keep their cards readable, but trust-critical card actions such as baseline selection, comparison selection, and report opening fail closed. Malformed metric entries degrade into neutral fallback metric rows in place.
+
+Missing, whitespace-only, or failed snapshot images render the local `Snapshot image unavailable` placeholder. Image failures are tracked independently per card, replacement image URLs receive a fresh attempt, and malformed or duplicated scan IDs use received-position fallback only for view-local image recovery. That fallback is never used for route callbacks or host IDs.
+
+When history is empty, the screen keeps the readable empty-history card and suppresses contradictory host comparison summaries even if a comparison payload is present.
 
 The empty state is readable and informational:
 
@@ -323,4 +356,34 @@ You appear to be offline. Supplied progress snapshots remain readable. The host 
 
 Back, Start a new scan, Select baseline, Select comparison, Open report, Open routine, and Retry are all explicit user-activated callbacks. The component uses StrictMode-safe mounted tracking, duplicate-activation protection, action-scoped pending labels, contextual repeated-control accessible names, and callback-rejection toasts. Opaque profile IDs, scan IDs, metric IDs, and routine IDs remain callback-only context and are not rendered manually.
 
-No `app/page.tsx` route integration, host-adapter module, shared component extraction, Screen 24, persistence, API call, camera access, picker access, file input, external navigation, progress inference, comparison calculation, adherence calculation, scan ranking, scan grouping, recommendation generation, affiliate route, marketplace route, external seller route, sponsored content, or medical-monitoring claim was introduced. The standalone regression suite lives at `components/progress-tracking-screen.test.tsx`.
+No host-adapter module, shared component extraction, Screen 24, persistence, API call, geolocation request, camera access, picker access, file input, browser-history API, routing library, external navigation, Store route from Progress, progress inference, trend calculation, score calculation, delta calculation, adherence calculation, improvement inference, deterioration inference, scan ranking, scan grouping, recommendation generation, affiliate route, marketplace route, external seller route, sponsored content, or medical-monitoring claim was introduced. The standalone regression suite lives at `components/progress-tracking-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
+
+## OrderDetailsScreen Integration
+
+`OrderDetailsScreen` is Screen 24, the first-party order-details destination for an existing DermaLens order. It exists as a standalone component and is not yet integrated into `app/page.tsx`.
+
+Intended future entries:
+
+```text
+OrderConfirmationAndPaymentResultScreen
+-> confirmed order
+-> OrderDetailsScreen
+
+HomeDashboardScreen
+-> Recent order details
+-> OrderDetailsScreen
+```
+
+Dashboard Orders remains a separate blocked future order-history route. Screen 24 does not add an order-history route, Screen 25, or another future route.
+
+The host owns order ID, order-reference label, status label and tone, item order, item labels, delivery-address summary, shipping-update order, shipping-update labels, receipt labels, support availability, receipt-download availability, offline capability, persistence, logistics retrieval, payment-result retrieval, and routing. Opaque order, line-item, and update IDs remain callback-only context and are never rendered directly.
+
+Line items and shipping updates render in the received host order. Malformed line-item entries remain in place with neutral fallback cards such as `Unnamed product` and `Quantity unavailable`; malformed shipping updates remain in place with neutral `Update unavailable` and `Time unavailable` copy. The screen does not sort, filter, group, rank, or derive order data locally.
+
+Item-image recovery is independent per card. A missing, whitespace-only, or failed image URL renders the local `Item image unavailable` placeholder. Replacement image URLs receive a fresh attempt. When line-item IDs are malformed or duplicated, received-position fallback is used only for view-local image recovery and never for callbacks or host IDs.
+
+The empty-items state is readable and neutral for both explicit `state="empty"` and ready reports with `items: []`. Supplied delivery address, shipping updates, receipt summary, Back, support, receipt-download action, and toast region remain governed by host availability. Offline status is informational: supplied order details remain readable, Back and support follow host flags, and receipt download uses a distinct offline capability flag.
+
+Support is a host-owned callback that passes only the usable `orderId`. Receipt download is also host-owned, passes only the usable `orderId`, has its own offline capability, and does not synthesize or persist a receipt. Callback failures become readable non-blocking toasts.
+
+No total calculation, shipping calculation, tax calculation, subtotal calculation, quantity calculation, direct logistics API call, polling, API call, persistence, external navigation, raw tracking URL, raw receipt URL, exposed payment-session ID, gateway ID, transaction ID, camera access, picker access, file input, forced sign-in, affiliate route, marketplace route, external-seller route, or sponsored route was introduced. The standalone regression suite lives at `components/order-details-screen.test.tsx`.

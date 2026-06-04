@@ -528,6 +528,94 @@ describe("ProgressTrackingScreen profile and snapshot rendering", () => {
     ).toHaveAttribute("src", "/progress-june-replacement.jpg");
   });
 
+  it("tracks multiple failed snapshot previews independently across rerenders", () => {
+    const props = createProps();
+    const { rerender } = render(<ProgressTrackingScreen {...props} />);
+
+    fireEvent.error(
+      screen.getByRole("img", { name: "June skincare snapshot" }),
+    );
+    fireEvent.error(
+      screen.getByRole("img", { name: "July skincare snapshot" }),
+    );
+
+    let cards = screen.getAllByTestId("progress-scan-card");
+    expect(within(cards[0]).getByText(copy.imageUnavailable)).toBeVisible();
+    expect(within(cards[1]).getByText(copy.imageUnavailable)).toBeVisible();
+    expect(within(cards[0]).getByText("June snapshot")).toBeVisible();
+    expect(within(cards[1]).getByText("July snapshot")).toBeVisible();
+
+    rerender(<ProgressTrackingScreen {...props} isOffline />);
+
+    cards = screen.getAllByTestId("progress-scan-card");
+    expect(within(cards[0]).getByText(copy.imageUnavailable)).toBeVisible();
+    expect(within(cards[1]).getByText(copy.imageUnavailable)).toBeVisible();
+
+    rerender(
+      <ProgressTrackingScreen
+        {...props}
+        isOffline
+        report={{
+          ...defaultReport,
+          scans: [
+            {
+              ...defaultScans[0],
+              imageUrl: "/progress-june-fresh.jpg",
+            },
+            defaultScans[1],
+            defaultScans[2],
+          ],
+        }}
+      />,
+    );
+
+    cards = screen.getAllByTestId("progress-scan-card");
+    expect(
+      within(cards[0]).getByRole("img", {
+        name: "June skincare snapshot",
+      }),
+    ).toHaveAttribute("src", "/progress-june-fresh.jpg");
+    expect(within(cards[1]).getByText(copy.imageUnavailable)).toBeVisible();
+  });
+
+  it("isolates same-URL malformed-card image failures by received position", () => {
+    renderScreen({
+      report: {
+        ...defaultReport,
+        scans: [
+          {
+            scanId: "",
+            capturedAtLabel: "First malformed date",
+            titleLabel: "First malformed",
+            imageUrl: "/shared-progress.jpg",
+            imageAlt: "Shared malformed preview",
+          },
+          {
+            scanId: " ",
+            capturedAtLabel: "Second malformed date",
+            titleLabel: "Second malformed",
+            imageUrl: "/shared-progress.jpg",
+            imageAlt: "Shared malformed preview",
+          },
+        ] as ProgressScanHistoryItem[],
+      },
+    });
+
+    const cards = screen.getAllByTestId("progress-scan-card");
+    const images = screen.getAllByRole("img", {
+      name: "Shared malformed preview",
+    });
+
+    fireEvent.error(images[0]);
+
+    expect(within(cards[0]).getByText(copy.imageUnavailable)).toBeVisible();
+    expect(
+      within(cards[1]).getByRole("img", {
+        name: "Shared malformed preview",
+      }),
+    ).toHaveAttribute("src", "/shared-progress.jpg");
+  });
+
   it("renders malformed scan entries in received order with neutral fallbacks", () => {
     const { container } = renderScreen({
       report: {
@@ -676,12 +764,29 @@ describe("ProgressTrackingScreen scan actions", () => {
     expect(onOpenReport).toHaveBeenCalledWith(opaqueScanIds[2]);
   });
 
+  it("uses canOpenReports as the global report-route capability", () => {
+    const onOpenReport = vi.fn();
+
+    renderScreen({
+      canOpenReports: false,
+      onOpenReport,
+    });
+
+    const button = getButton(`${copy.reportBlocked}: August snapshot`);
+    expect(button).toBeDisabled();
+
+    button.removeAttribute("disabled");
+    fireEvent.click(button);
+
+    expect(onOpenReport).not.toHaveBeenCalled();
+  });
+
   it("keeps host-blocked, callback-absent, per-scan blocked, and malformed scan actions guarded", () => {
     const onSelectBaseline = vi.fn();
     const onSelectComparison = vi.fn();
     const onOpenReport = vi.fn();
     const { rerender } = renderScreen({
-      canOpenReport: false,
+      canOpenReports: false,
       canSelectBaseline: false,
       canSelectComparison: false,
       onOpenReport,
@@ -754,6 +859,63 @@ describe("ProgressTrackingScreen scan actions", () => {
     expect(onSelectBaseline).not.toHaveBeenCalled();
   });
 
+  it("keeps duplicated scan-ID cards readable while fail-closing route actions", () => {
+    const onSelectBaseline = vi.fn();
+    const onSelectComparison = vi.fn();
+    const onOpenReport = vi.fn();
+
+    renderScreen({
+      onOpenReport,
+      onSelectBaseline,
+      onSelectComparison,
+      report: {
+        ...defaultReport,
+        scans: [
+          {
+            scanId: "scan-duplicate",
+            capturedAtLabel: "June date",
+            titleLabel: "June duplicate",
+          },
+          {
+            scanId: "scan-duplicate",
+            capturedAtLabel: "July date",
+            titleLabel: "July duplicate",
+          },
+          {
+            scanId: "scan-unique",
+            capturedAtLabel: "August date",
+            titleLabel: "August unique",
+          },
+        ],
+      },
+    });
+
+    const cards = screen.getAllByTestId("progress-scan-card");
+
+    expect(cards).toHaveLength(3);
+    expectTextOrder("June duplicate", "July duplicate", "August unique");
+
+    for (const title of ["June duplicate", "July duplicate"]) {
+      expect(getButton(`${copy.baselineBlocked}: ${title}`)).toBeDisabled();
+      expect(getButton(`${copy.comparisonBlocked}: ${title}`)).toBeDisabled();
+      expect(getButton(`${copy.reportBlocked}: ${title}`)).toBeDisabled();
+    }
+
+    expect(getButton(`${copy.useBaseline}: August unique`)).toBeEnabled();
+    expect(getButton(`${copy.useComparison}: August unique`)).toBeEnabled();
+    expect(getButton(`${copy.openReport}: August unique`)).toBeEnabled();
+
+    const duplicateButton = getButton(`${copy.baselineBlocked}: June duplicate`);
+    duplicateButton.removeAttribute("disabled");
+    fireEvent.click(duplicateButton);
+
+    expect(onSelectBaseline).not.toHaveBeenCalled();
+    expect(onSelectComparison).not.toHaveBeenCalled();
+    expect(onOpenReport).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain("scan-duplicate");
+    expect(document.body.textContent).not.toContain("scan-unique");
+  });
+
   it("converts scan-action rejections into action-specific toasts", async () => {
     const user = userEvent.setup();
     const cases: Array<{
@@ -819,6 +981,25 @@ describe("ProgressTrackingScreen comparison summary", () => {
     });
 
     expect(screen.queryByText(copy.comparisonTitle)).not.toBeInTheDocument();
+  });
+
+  it("suppresses contradictory comparison summaries when history is empty", () => {
+    renderScreen({
+      report: {
+        ...defaultReport,
+        scans: [],
+        comparison: defaultReport.comparison,
+      },
+      state: "ready",
+    });
+
+    expect(screen.getByText(copy.emptyHeading)).toBeVisible();
+    expect(screen.queryByText(copy.comparisonTitle)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(defaultReport.comparison!.headingLabel),
+    ).not.toBeInTheDocument();
+    expect(screen.queryAllByTestId("progress-metric-row")).toHaveLength(0);
+    expect(getButton(copy.startNewScan)).toBeVisible();
   });
 
   it("fails malformed comparison IDs into a readable summary without metric rows", () => {

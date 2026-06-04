@@ -19,6 +19,11 @@ import CheckoutReviewScreen, { type CheckoutReviewReport } from "@/components/ch
 import SecurePaymentGatewayHandoffScreen, { type SecurePaymentGatewayHandoffReport } from "@/components/secure-payment-gateway-handoff-screen"
 import OrderConfirmationAndPaymentResultScreen, { type OrderPaymentResultReport } from "@/components/order-confirmation-and-payment-result-screen"
 import HomeDashboardScreen, { type HomeDashboardReport } from "@/components/home-dashboard-screen"
+import ProgressTrackingScreen, {
+  type ProgressComparisonMetric,
+  type ProgressScanHistoryItem,
+  type ProgressTrackingReport,
+} from "@/components/progress-tracking-screen"
 import ProfileSwitcherAndManagementScreen, { type ManagedProfileSummary, type ProfileSwitcherAndManagementReport } from "@/components/profile-switcher-and-management-screen"
 import GuestIngredientScannerEntryScreen, { type GuestIngredientScannerEntryReport } from "@/components/guest-ingredient-scanner-entry-screen"
 import IngredientInputReviewScreen, {
@@ -32,14 +37,19 @@ import IngredientScannerResultsScreen, {
   type IngredientScannerResultsReport,
 } from "@/components/ingredient-scanner-results-screen"
 
-type Screen = "welcome" | "privacy-consent" | "profile-setup" | "image-source" | "camera" | "image-review" | "analysis" | "results-summary" | "full-report" | "routine" | "store" | "cart" | "product-detail" | "checkout-details" | "checkout-review" | "payment-gateway" | "order-confirmation" | "dashboard" | "profile-management" | "ingredient-scanner-entry" | "ingredient-input-review" | "ingredient-scanner-results"
+type Screen = "welcome" | "privacy-consent" | "profile-setup" | "image-source" | "camera" | "image-review" | "analysis" | "results-summary" | "full-report" | "routine" | "store" | "cart" | "product-detail" | "checkout-details" | "checkout-review" | "payment-gateway" | "order-confirmation" | "dashboard" | "progress-tracking" | "profile-management" | "ingredient-scanner-entry" | "ingredient-input-review" | "ingredient-scanner-results"
 type ProductDetailSourceScreen = "routine" | "store" | "cart"
 type ManagedProfileId = "profile-001" | "profile-002"
+type DemoProgressScanId =
+  | "progress-scan-001"
+  | "progress-scan-002"
+  | "progress-scan-003"
 type IngredientScannerEntryBackScreen = "welcome" | "dashboard"
 type ProfileManagementBackScreen = "dashboard" | "image-source" | "image-review" | "ingredient-scanner-entry" | "ingredient-input-review"
 type ProfileSetupBackScreen = "privacy-consent" | "dashboard" | "profile-management"
-type ImageSourceBackScreen = "profile-setup" | "dashboard" | "profile-management"
-type RoutineBackScreen = "full-report" | "results-summary" | "dashboard"
+type ImageSourceBackScreen = "profile-setup" | "dashboard" | "profile-management" | "progress-tracking"
+type RoutineBackScreen = "full-report" | "results-summary" | "dashboard" | "progress-tracking"
+type ResultsSummaryCloseScreen = "dashboard" | "progress-tracking"
 type StoreBackScreen = "routine" | "dashboard"
 
 interface DemoIngredientInputDraft {
@@ -124,6 +134,47 @@ const sampleIngredientGuidanceItems: IngredientScannerGuidanceItem[] = [
   },
 ]
 
+const sampleProgressScanIds = {
+  first: "progress-scan-001",
+  second: "progress-scan-002",
+  third: "progress-scan-003",
+} satisfies Record<"first" | "second" | "third", DemoProgressScanId>
+
+const sampleProgressMetrics: ProgressComparisonMetric[] = [
+  {
+    metricId: "progress-metric-001",
+    label: "Texture note",
+    baselineValueLabel: "Host baseline note",
+    comparisonValueLabel: "Host comparison note",
+    deltaLabel: "Host-supplied context only",
+    supporting:
+      "This demo label is supplied by the controller fixture. No trend calculation is performed.",
+    tone: "neutral",
+  },
+  {
+    metricId: "progress-metric-002",
+    label: "Comfort note",
+    baselineValueLabel: "Host baseline comfort label",
+    comparisonValueLabel: "Host comparison comfort label",
+    supporting: "The host owns interpretation and any future processing.",
+    tone: "attention",
+  },
+]
+
+function resolveDemoProgressScanId(
+  scanId: string,
+): DemoProgressScanId | null {
+  if (
+    scanId === sampleProgressScanIds.first ||
+    scanId === sampleProgressScanIds.second ||
+    scanId === sampleProgressScanIds.third
+  ) {
+    return scanId
+  }
+
+  return null
+}
+
 // Sample image for demo purposes
 const SAMPLE_IMAGE_URL = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&h=800&fit=crop&crop=face"
 
@@ -146,6 +197,8 @@ export default function Page() {
     useState<ProfileSetupBackScreen>("privacy-consent")
   const [imageSourceBackScreen, setImageSourceBackScreen] =
     useState<ImageSourceBackScreen>("profile-setup")
+  const [resultsSummaryCloseScreen, setResultsSummaryCloseScreen] =
+    useState<ResultsSummaryCloseScreen>("dashboard")
   const [profileManagementBackScreen, setProfileManagementBackScreen] =
     useState<ProfileManagementBackScreen>("dashboard")
   const [ingredientScannerEntryBackScreen, setIngredientScannerEntryBackScreen] =
@@ -156,6 +209,10 @@ export default function Page() {
     useState<DemoIngredientInputDraft | null>(null)
   const [ingredientScannerResultContext, setIngredientScannerResultContext] =
     useState<DemoIngredientScannerResultContext | null>(null)
+  const [progressBaselineScanId, setProgressBaselineScanId] =
+    useState<DemoProgressScanId>(sampleProgressScanIds.first)
+  const [progressComparisonScanId, setProgressComparisonScanId] =
+    useState<DemoProgressScanId>(sampleProgressScanIds.second)
   const [routineBackScreen, setRoutineBackScreen] =
     useState<RoutineBackScreen>("full-report")
   const [storeBackScreen, setStoreBackScreen] =
@@ -820,6 +877,89 @@ export default function Page() {
 
   const activeManagedProfileDisplayName =
     activeManagedProfile?.displayName ?? profileName
+
+  const sampleProgressScans: ProgressScanHistoryItem[] = [
+    {
+      scanId: sampleProgressScanIds.first,
+      capturedAtLabel: "June 2, 2026",
+      titleLabel: "June snapshot",
+      categoryLabel: "Host-supplied snapshot",
+      summaryLabel: "Readable demo history supplied by the controller fixture.",
+      imageUrl: SAMPLE_IMAGE_URL,
+      imageAlt: `${activeManagedProfileDisplayName} June skincare snapshot`,
+      photoQualityLabel: "Host photo-quality label: clear preview",
+      isBaselineSelected: progressBaselineScanId === sampleProgressScanIds.first,
+      isComparisonSelected:
+        progressComparisonScanId === sampleProgressScanIds.first,
+      canSelectAsBaseline: true,
+      canSelectAsComparison: true,
+      canOpenReport: true,
+    },
+    {
+      scanId: sampleProgressScanIds.second,
+      capturedAtLabel: "July 2, 2026",
+      titleLabel: "July snapshot",
+      categoryLabel: "Host-supplied snapshot",
+      summaryLabel: "Readable demo history supplied by the controller fixture.",
+      imageUrl: SAMPLE_IMAGE_URL,
+      imageAlt: `${activeManagedProfileDisplayName} July skincare snapshot`,
+      photoQualityLabel: "Host photo-quality label: readable preview",
+      isBaselineSelected:
+        progressBaselineScanId === sampleProgressScanIds.second,
+      isComparisonSelected:
+        progressComparisonScanId === sampleProgressScanIds.second,
+      canSelectAsBaseline: true,
+      canSelectAsComparison: true,
+      canOpenReport: true,
+    },
+    {
+      scanId: sampleProgressScanIds.third,
+      capturedAtLabel: "August 2, 2026",
+      titleLabel: "August snapshot",
+      categoryLabel: "Host-supplied snapshot",
+      summaryLabel: "Readable demo history supplied by the controller fixture.",
+      imageUrl: undefined,
+      imageAlt: `${activeManagedProfileDisplayName} August skincare snapshot`,
+      photoQualityLabel: "Host photo-quality label: preview unavailable",
+      isBaselineSelected: progressBaselineScanId === sampleProgressScanIds.third,
+      isComparisonSelected:
+        progressComparisonScanId === sampleProgressScanIds.third,
+      canSelectAsBaseline: true,
+      canSelectAsComparison: true,
+      canOpenReport: true,
+    },
+  ]
+
+  const sampleProgressTrackingReport: ProgressTrackingReport = {
+    profile: {
+      profileId: activeManagedProfileId,
+      displayName: activeManagedProfileDisplayName,
+      contextLabel: "Active local profile supplied by the demo host.",
+    },
+    scans: sampleProgressScans,
+    comparison: {
+      baselineScanId: progressBaselineScanId,
+      comparisonScanId: progressComparisonScanId,
+      headingLabel:
+        "Host-supplied comparison for explicitly selected snapshots",
+      summaryLabel:
+        "The demo host supplies these notes after the customer explicitly chooses two snapshots.",
+      helperLabel:
+        "No automatic progress detection or trend calculation is performed.",
+      metrics: sampleProgressMetrics,
+    },
+    routinePrompt: {
+      routineId: sampleRoutineReport.routineId,
+      titleLabel: "Review your current routine",
+      supportingLabel:
+        "Routine context is supplied by the demo host. No adherence calculation is performed.",
+      actionLabel: "Open routine",
+    },
+    helperLabel:
+      "Select a baseline and comparison snapshot explicitly when you want the host to refresh comparison notes.",
+    privacyLabel:
+      "The demo keeps progress context in memory only. Persistence and storage policy remain host-owned.",
+  }
 
   // Demo-only host/controller fixture for returning-user dashboard routing.
   const sampleDashboardReport: HomeDashboardReport = {
@@ -2274,6 +2414,86 @@ export default function Page() {
     )
   }
 
+  // Progress Tracking Screen
+  if (currentScreen === "progress-tracking") {
+    return (
+      <ProgressTrackingScreen
+        state="ready"
+        report={sampleProgressTrackingReport}
+        isOffline={false}
+        canGoBack={true}
+        canStartNewScan={true}
+        canSelectBaseline={true}
+        canSelectComparison={true}
+        canOpenReports={true}
+        canOpenRoutine={true}
+        onBack={() => {
+          setCurrentScreen("dashboard")
+        }}
+        onStartNewScan={(profileId) => {
+          if (profileId !== activeManagedProfileId) {
+            console.log(
+              "Progress scan setup blocked because the active profile context is unavailable.",
+            )
+            return
+          }
+
+          console.log("Opening progress scan setup for profile:", profileId)
+          setImageSourceBackScreen("progress-tracking")
+          setCapturedImageUrl(null)
+          setCurrentScreen("image-source")
+        }}
+        onSelectBaseline={(scanId) => {
+          const resolvedScanId = resolveDemoProgressScanId(scanId)
+
+          if (resolvedScanId === null) {
+            console.log("Progress baseline selection failed closed:", scanId)
+            return
+          }
+
+          console.log("Selecting progress baseline snapshot:", resolvedScanId)
+          setProgressBaselineScanId(resolvedScanId)
+        }}
+        onSelectComparison={(scanId) => {
+          const resolvedScanId = resolveDemoProgressScanId(scanId)
+
+          if (resolvedScanId === null) {
+            console.log("Progress comparison selection failed closed:", scanId)
+            return
+          }
+
+          console.log("Selecting progress comparison snapshot:", resolvedScanId)
+          setProgressComparisonScanId(resolvedScanId)
+        }}
+        onOpenReport={(scanId) => {
+          const resolvedScanId = resolveDemoProgressScanId(scanId)
+
+          if (resolvedScanId === null) {
+            console.log("Progress report route failed closed:", scanId)
+            return
+          }
+
+          console.log("Opening progress snapshot report:", resolvedScanId)
+          setResultsSummaryCloseScreen("progress-tracking")
+          setCurrentScreen("results-summary")
+        }}
+        onOpenRoutine={(routineId) => {
+          if (routineId !== sampleRoutineReport.routineId) {
+            console.log("Progress routine route failed closed:", routineId)
+            return
+          }
+
+          console.log("Opening progress routine:", routineId)
+          setRoutineBackScreen("progress-tracking")
+          setCurrentScreen("routine")
+        }}
+        onRetryLoad={() => {
+          console.log("Retrying progress tracking load through future adapter.")
+        }}
+      />
+    )
+  }
+
   // Home Dashboard Screen
   if (currentScreen === "dashboard") {
     return (
@@ -2288,7 +2508,7 @@ export default function Page() {
         canOpenRoutine={true}
         canOpenGuestScanner={true}
         isGuestScannerAvailableOffline={false}
-        canOpenProgress={false}
+        canOpenProgress={true}
         canOpenOrders={false}
         canOpenStore={true}
         canOpenRecentOrder={false}
@@ -2304,6 +2524,7 @@ export default function Page() {
         }}
         onOpenLatestReport={(reportId) => {
           console.log("Opening dashboard latest report:", reportId)
+          setResultsSummaryCloseScreen("dashboard")
           setCurrentScreen("results-summary")
         }}
         onOpenRoutine={(routineId) => {
@@ -2317,7 +2538,7 @@ export default function Page() {
           setCurrentScreen("ingredient-scanner-entry")
         }}
         onOpenProgress={() => {
-          console.log("Opening dashboard progress...")
+          setCurrentScreen("progress-tracking")
         }}
         onOpenOrders={() => {
           console.log("Opening dashboard orders...")
@@ -2432,7 +2653,7 @@ export default function Page() {
         isOffline={false}
         canBuildRoutine={true}
         onClose={() => {
-          setCurrentScreen("dashboard")
+          setCurrentScreen(resultsSummaryCloseScreen)
         }}
         onOpenRoutine={() => {
           setRoutineBackScreen("results-summary")
@@ -2475,6 +2696,7 @@ export default function Page() {
           setCurrentScreen("image-review")
         }}
         onViewResults={() => {
+          setResultsSummaryCloseScreen("dashboard")
           setCurrentScreen("results-summary")
         }}
       />

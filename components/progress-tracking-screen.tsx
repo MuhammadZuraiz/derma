@@ -102,7 +102,7 @@ export interface ProgressTrackingScreenProps {
   canStartNewScan?: boolean;
   canSelectBaseline?: boolean;
   canSelectComparison?: boolean;
-  canOpenReport?: boolean;
+  canOpenReports?: boolean;
   canOpenRoutine?: boolean;
   onBack: () => void | Promise<void>;
   onStartNewScan: (
@@ -340,6 +340,35 @@ function getTone(
   tone: unknown,
 ): ProgressComparisonTone {
   return isProgressComparisonTone(tone) ? tone : "neutral";
+}
+
+function getUniqueUsableScanIds(
+  scans: unknown[],
+): ReadonlySet<string> {
+  const counts = new Map<string, number>();
+
+  for (const item of scans) {
+    const safeScan = getRecord(item);
+
+    if (!isNonWhitespaceString(safeScan.scanId)) {
+      continue;
+    }
+
+    counts.set(
+      safeScan.scanId,
+      (counts.get(safeScan.scanId) ?? 0) + 1,
+    );
+  }
+
+  const uniqueIds = new Set<string>();
+
+  for (const [scanId, count] of counts) {
+    if (count === 1) {
+      uniqueIds.add(scanId);
+    }
+  }
+
+  return uniqueIds;
 }
 
 function toneClassName(
@@ -591,13 +620,13 @@ function ComparisonIntroCard({
 }
 
 function SnapshotImage({
-  failedImageKey,
+  failedImageKeys,
   imageAlt,
   imageKey,
   imageUrl,
   onImageError,
 }: {
-  failedImageKey: string | null;
+  failedImageKeys: ReadonlySet<string>;
   imageAlt: string;
   imageKey: string | null;
   imageUrl: string | null;
@@ -605,7 +634,7 @@ function SnapshotImage({
 }) {
   const failed =
     imageKey !== null &&
-    failedImageKey === imageKey;
+    failedImageKeys.has(imageKey);
 
   if (imageUrl === null || imageKey === null || failed) {
     return (
@@ -684,27 +713,31 @@ function ScanActionButton({
 function ScanHistoryCard({
   activeOperation,
   activeTargetId,
-  canOpenReport,
+  canOpenReports,
   canSelectBaseline,
   canSelectComparison,
-  failedImageKey,
+  failedImageKeys,
   item,
+  listIndex,
   onImageError,
   onOpenReport,
   onSelectBaseline,
   onSelectComparison,
+  uniqueUsableScanIds,
 }: {
   activeOperation: ProgressTrackingOperation;
   activeTargetId: string | null;
-  canOpenReport: boolean;
+  canOpenReports: boolean;
   canSelectBaseline: boolean;
   canSelectComparison: boolean;
-  failedImageKey: string | null;
+  failedImageKeys: ReadonlySet<string>;
   item: unknown;
+  listIndex: number;
   onImageError: (imageKey: string) => void;
   onOpenReport?: (scanId: string) => void;
   onSelectBaseline?: (scanId: string) => void;
   onSelectComparison?: (scanId: string) => void;
+  uniqueUsableScanIds: ReadonlySet<string>;
 }) {
   const safeScan = getRecord(item);
   const scanId = isNonWhitespaceString(safeScan.scanId)
@@ -734,29 +767,37 @@ function ScanHistoryCard({
     safeScan.imageAlt,
     copy.imageAltFallback,
   );
+  const hasUniqueUsableScanId =
+    scanId !== null &&
+    uniqueUsableScanIds.has(scanId);
+  const imageIdentity =
+    hasUniqueUsableScanId && scanId !== null
+      ? scanId
+      : `position-${listIndex}`;
   const imageKey =
-    scanId !== null && imageUrl !== null
-      ? `${scanId}:${imageUrl}`
-      : imageUrl !== null
-        ? `snapshot:${imageUrl}`
-        : null;
+    imageUrl !== null
+      ? `${imageIdentity}:${imageUrl}`
+      : null;
   const isBusy = activeOperation !== null;
   const selectedBaseline = safeScan.isBaselineSelected === true;
   const selectedComparison = safeScan.isComparisonSelected === true;
   const baselineAllowed =
     canSelectBaseline &&
+    hasUniqueUsableScanId &&
     safeScan.canSelectAsBaseline !== false &&
     scanId !== null &&
     onSelectBaseline !== undefined &&
     !selectedBaseline;
   const comparisonAllowed =
     canSelectComparison &&
+    hasUniqueUsableScanId &&
     safeScan.canSelectAsComparison !== false &&
     scanId !== null &&
     onSelectComparison !== undefined &&
     !selectedComparison;
   const reportAllowed =
-    canOpenReport &&
+    canOpenReports &&
+    hasUniqueUsableScanId &&
     safeScan.canOpenReport !== false &&
     scanId !== null &&
     onOpenReport !== undefined;
@@ -768,7 +809,7 @@ function ScanHistoryCard({
     >
       <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
         <SnapshotImage
-          failedImageKey={failedImageKey}
+          failedImageKeys={failedImageKeys}
           imageAlt={imageAlt}
           imageKey={imageKey}
           imageUrl={imageUrl}
@@ -875,10 +916,10 @@ function ScanHistoryCard({
 function ScanHistoryList({
   activeOperation,
   activeTargetId,
-  canOpenReport,
+  canOpenReports,
   canSelectBaseline,
   canSelectComparison,
-  failedImageKey,
+  failedImageKeys,
   onImageError,
   onOpenReport,
   onSelectBaseline,
@@ -887,16 +928,18 @@ function ScanHistoryList({
 }: {
   activeOperation: ProgressTrackingOperation;
   activeTargetId: string | null;
-  canOpenReport: boolean;
+  canOpenReports: boolean;
   canSelectBaseline: boolean;
   canSelectComparison: boolean;
-  failedImageKey: string | null;
+  failedImageKeys: ReadonlySet<string>;
   onImageError: (imageKey: string) => void;
   onOpenReport?: (scanId: string) => void;
   onSelectBaseline?: (scanId: string) => void;
   onSelectComparison?: (scanId: string) => void;
   scans: unknown[];
 }) {
+  const uniqueUsableScanIds = getUniqueUsableScanIds(scans);
+
   return (
     <section className="rounded-[8px] border border-[var(--dl-border-subtle)] bg-[var(--dl-surface-soft)] p-5 shadow-sm">
       <div className="flex items-center gap-3">
@@ -912,16 +955,18 @@ function ScanHistoryList({
           <ScanHistoryCard
             activeOperation={activeOperation}
             activeTargetId={activeTargetId}
-            canOpenReport={canOpenReport}
+            canOpenReports={canOpenReports}
             canSelectBaseline={canSelectBaseline}
             canSelectComparison={canSelectComparison}
-            failedImageKey={failedImageKey}
+            failedImageKeys={failedImageKeys}
             item={item}
             key={index}
+            listIndex={index}
             onImageError={onImageError}
             onOpenReport={onOpenReport}
             onSelectBaseline={onSelectBaseline}
             onSelectComparison={onSelectComparison}
+            uniqueUsableScanIds={uniqueUsableScanIds}
           />
         ))}
       </ul>
@@ -1192,7 +1237,7 @@ export default function ProgressTrackingScreen({
   canStartNewScan = true,
   canSelectBaseline = true,
   canSelectComparison = true,
-  canOpenReport = true,
+  canOpenReports = true,
   canOpenRoutine = true,
   onBack,
   onStartNewScan,
@@ -1210,8 +1255,8 @@ export default function ProgressTrackingScreen({
   const [activeTargetId, setActiveTargetId] =
     useState<string | null>(null);
   const [toastText, setToastText] = useState<string | null>(null);
-  const [failedImageKey, setFailedImageKey] =
-    useState<string | null>(null);
+  const [failedImageKeys, setFailedImageKeys] =
+    useState<ReadonlySet<string>>(() => new Set());
 
   useEffect(() => {
     mountedRef.current = true;
@@ -1246,6 +1291,21 @@ export default function ProgressTrackingScreen({
     (resolvedState === "ready" &&
       readyReport !== null &&
       readyReport.scans.length === 0);
+
+  function recordFailedImageKey(
+    imageKey: string,
+  ) {
+    setFailedImageKeys((current) => {
+      if (current.has(imageKey)) {
+        return current;
+      }
+
+      const next = new Set(current);
+      next.add(imageKey);
+
+      return next;
+    });
+  }
 
   async function runOperation(
     operation: InFlightOperation,
@@ -1351,7 +1411,7 @@ export default function ProgressTrackingScreen({
 
   function activateOpenReport(scanId: string) {
     if (
-      !canOpenReport ||
+      !canOpenReports ||
       onOpenReport === undefined ||
       !isNonWhitespaceString(scanId) ||
       isBusy
@@ -1468,11 +1528,11 @@ export default function ProgressTrackingScreen({
             <ScanHistoryList
               activeOperation={activeOperation}
               activeTargetId={activeTargetId}
-              canOpenReport={canOpenReport}
+              canOpenReports={canOpenReports}
               canSelectBaseline={canSelectBaseline}
               canSelectComparison={canSelectComparison}
-              failedImageKey={failedImageKey}
-              onImageError={setFailedImageKey}
+              failedImageKeys={failedImageKeys}
+              onImageError={recordFailedImageKey}
               onOpenReport={onOpenReport ? activateOpenReport : undefined}
               onSelectBaseline={
                 onSelectBaseline ? activateSelectBaseline : undefined
@@ -1488,7 +1548,7 @@ export default function ProgressTrackingScreen({
           aria-label="Progress details"
           className="flex flex-col gap-5"
         >
-          {readyReport.comparison ? (
+          {!showEmpty && readyReport.comparison ? (
             <ComparisonSummaryCard comparison={readyReport.comparison} />
           ) : null}
           {readyReport.routinePrompt ? (
