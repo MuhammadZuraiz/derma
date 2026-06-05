@@ -135,6 +135,16 @@ function getRecord(
     : {};
 }
 
+function isRecordObject(
+  value: unknown,
+): value is Record<string, unknown> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  );
+}
+
 export function hasUsableOrderDetailsReport(
   report:
     | OrderDetailsReport
@@ -1025,11 +1035,11 @@ function ReceiptSummaryCard({
 }: {
   receipt: unknown;
 }) {
-  if (receipt === undefined) {
+  if (!isRecordObject(receipt)) {
     return null;
   }
 
-  const safeReceipt = getRecord(receipt);
+  const safeReceipt = receipt;
   const receiptSubtotalLabel = displayString(
     safeReceipt.subtotalLabel,
   );
@@ -1243,6 +1253,7 @@ function ReadyExperience({
   onOpenSupport,
   receiptActionVisible,
   report,
+  showEmptyItems,
 }: {
   activeOperation: OrderDetailsOperation;
   canDownloadReceipt: boolean;
@@ -1258,8 +1269,11 @@ function ReadyExperience({
   onOpenSupport: () => void;
   receiptActionVisible: boolean;
   report: OrderDetailsReport | null;
+  showEmptyItems: boolean;
 }) {
-  const items = report?.items ?? [];
+  const items = showEmptyItems
+    ? []
+    : report?.items ?? [];
 
   return (
     <div className="mx-auto min-h-[100dvh] w-full max-w-[1100px] px-5 pb-[max(28px,env(safe-area-inset-bottom))] pt-[max(20px,env(safe-area-inset-top))] sm:px-6">
@@ -1437,9 +1451,9 @@ export default function OrderDetailsScreen({
       : runtimeState;
   const readyReport =
     hasUsableReport ? report : null;
-  const receiptExists =
-    readyReport?.receipt !== undefined &&
-    readyReport.receipt !== null;
+  const hasReceiptContext = isRecordObject(
+    readyReport?.receipt,
+  );
   const supportEnabled =
     readyReport !== null &&
     canOpenSupport &&
@@ -1447,14 +1461,14 @@ export default function OrderDetailsScreen({
     activeOperation === null;
   const receiptBlockedByOffline =
     readyReport !== null &&
-    receiptExists &&
+    hasReceiptContext &&
     canDownloadReceipt &&
     Boolean(onDownloadReceipt) &&
     isOffline &&
     !isReceiptDownloadAvailableOffline;
   const receiptDownloadEnabled =
     readyReport !== null &&
-    receiptExists &&
+    hasReceiptContext &&
     canDownloadReceipt &&
     Boolean(onDownloadReceipt) &&
     (
@@ -1463,7 +1477,7 @@ export default function OrderDetailsScreen({
     ) &&
     activeOperation === null;
   const receiptActionVisible =
-    receiptExists ||
+    hasReceiptContext ||
     Boolean(onDownloadReceipt);
 
   const runOperation = useCallback(
@@ -1658,6 +1672,9 @@ export default function OrderDetailsScreen({
             receiptActionVisible
           }
           report={readyReport}
+          showEmptyItems={
+            effectiveState === "empty"
+          }
         />
       ) : null}
       {effectiveState === "error" ? (

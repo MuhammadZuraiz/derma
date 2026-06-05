@@ -15,7 +15,41 @@ const mockData = vi.hoisted(() => ({
     countryCode: "US",
     saveOnDevice: true,
   },
+  initialScreenOverride: null as string | null,
+  selectedShippingOptionOverride: null as string | null,
+  useStateCall: 0,
 }))
+
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>()
+
+  return {
+    ...actual,
+    useState: ((initial: unknown) => {
+      mockData.useStateCall += 1
+
+      if (
+        mockData.useStateCall === 1 &&
+        mockData.initialScreenOverride !== null
+      ) {
+        return actual.useState(
+          mockData.initialScreenOverride,
+        )
+      }
+
+      if (
+        initial === "shipopt-001" &&
+        mockData.selectedShippingOptionOverride !== null
+      ) {
+        return actual.useState(
+          mockData.selectedShippingOptionOverride,
+        )
+      }
+
+      return actual.useState(initial)
+    }) as typeof actual.useState,
+  }
+})
 
 type MockProps = Record<string, any>
 type User = ReturnType<typeof userEvent.setup>
@@ -213,6 +247,13 @@ vi.mock("@/components/home-dashboard-screen", () => ({
         type="button"
       >
         Dashboard open recent order
+      </button>
+      <button
+        disabled={!canOpenRecentOrder}
+        onClick={() => onOpenRecentOrder("unknown-order-id")}
+        type="button"
+      >
+        Dashboard open unknown recent order
       </button>
     </section>
   ),
@@ -756,7 +797,224 @@ vi.mock("@/components/secure-payment-gateway-handoff-screen", () => ({
 }))
 
 vi.mock("@/components/order-confirmation-and-payment-result-screen", () => ({
-  default: () => <section data-testid="order-result-screen">Order result</section>,
+  default: ({
+    canViewOrder,
+    onBackToReview,
+    onContinueShopping,
+    onRefreshStatus,
+    onRetryPayment,
+    onViewOrder,
+    report,
+    state,
+  }: MockProps) => (
+    <section data-testid="order-result-screen">
+      <div data-testid="order-result-state">{state}</div>
+      <div data-testid="order-result-report">{JSON.stringify(report)}</div>
+      <div data-testid="order-result-props">
+        {JSON.stringify({ canViewOrder })}
+      </div>
+      <button
+        disabled={!canViewOrder}
+        onClick={() => onViewOrder(report.orderId)}
+        type="button"
+      >
+        Order result view order
+      </button>
+      <button
+        disabled={!canViewOrder}
+        onClick={() => onViewOrder("unknown-order-id")}
+        type="button"
+      >
+        Order result view unknown order
+      </button>
+      <button onClick={onContinueShopping} type="button">
+        Order result continue shopping
+      </button>
+      <button onClick={onBackToReview} type="button">
+        Order result back to review
+      </button>
+      <button onClick={onRefreshStatus} type="button">
+        Order result refresh
+      </button>
+      <button onClick={onRetryPayment} type="button">
+        Order result retry payment
+      </button>
+    </section>
+  ),
+}))
+
+vi.mock("@/components/order-details-screen", () => ({
+  default: ({
+    canDownloadReceipt,
+    canGoBack,
+    canOpenSupport,
+    isOffline,
+    isReceiptDownloadAvailableOffline,
+    onBack,
+    onDownloadReceipt,
+    onOpenSupport,
+    onRetryLoad,
+    report,
+    state,
+  }: MockProps) => (
+    <section data-testid="order-details-screen">
+      <div data-testid="order-details-report">
+        {JSON.stringify(report)}
+      </div>
+      <div data-testid="order-details-order-id">
+        {report?.orderId ?? ""}
+      </div>
+      <div data-testid="order-details-reference-label">
+        {report?.orderReferenceLabel ?? ""}
+      </div>
+      <div data-testid="order-details-status-label">
+        {report?.statusLabel ?? ""}
+      </div>
+      <div data-testid="order-details-item-names">
+        {JSON.stringify(
+          report?.items?.map((item: MockProps) => item.productName) ?? [],
+        )}
+      </div>
+      <div data-testid="order-details-shipping-update-labels">
+        {JSON.stringify(
+          report?.shippingUpdates?.map(
+            (update: MockProps) => update.statusLabel,
+          ) ?? [],
+        )}
+      </div>
+      <div data-testid="order-details-total-label">
+        {report?.receipt?.totalLabel ?? ""}
+      </div>
+      <div data-testid="order-details-props">
+        {JSON.stringify({
+          canDownloadReceipt,
+          canGoBack,
+          canOpenSupport,
+          isOffline,
+          isReceiptDownloadAvailableOffline,
+          state,
+        })}
+      </div>
+      <button onClick={onBack} type="button">
+        Order details back
+      </button>
+      <button
+        onClick={() => onOpenSupport(report?.orderId ?? "")}
+        type="button"
+      >
+        Order details open support
+      </button>
+      <button
+        onClick={() => onOpenSupport("unknown-order-id")}
+        type="button"
+      >
+        Order details open support with stale order
+      </button>
+      <button
+        onClick={() => onDownloadReceipt(report?.orderId ?? "")}
+        type="button"
+      >
+        Order details download receipt
+      </button>
+      <button
+        onClick={() => onDownloadReceipt("unknown-order-id")}
+        type="button"
+      >
+        Order details download receipt with stale order
+      </button>
+      <button onClick={onRetryLoad} type="button">
+        Order details retry
+      </button>
+    </section>
+  ),
+}))
+
+vi.mock("@/components/order-history-screen", () => ({
+  default: ({
+    canGoBack,
+    canLoadMore,
+    canOpenOrders,
+    isLoadMoreAvailableOffline,
+    isOffline,
+    onBack,
+    onLoadMore,
+    onOpenOrder,
+    onRetryLoad,
+    report,
+    state,
+  }: MockProps) => {
+    const orders = report?.orders ?? []
+
+    return (
+      <section data-testid="order-history-screen">
+        <div data-testid="order-history-report">
+          {JSON.stringify(report)}
+        </div>
+        <div data-testid="order-history-order-ids">
+          {JSON.stringify(
+            orders.map((order: MockProps) => order.orderId),
+          )}
+        </div>
+        <div data-testid="order-history-reference-labels">
+          {JSON.stringify(
+            orders.map(
+              (order: MockProps) => order.orderReferenceLabel,
+            ),
+          )}
+        </div>
+        <div data-testid="order-history-status-labels">
+          {JSON.stringify(
+            orders.map((order: MockProps) => order.statusLabel),
+          )}
+        </div>
+        <div data-testid="order-history-total-labels">
+          {JSON.stringify(
+            orders.map((order: MockProps) => order.totalLabel),
+          )}
+        </div>
+        <div data-testid="order-history-open-availability">
+          {JSON.stringify(
+            orders.map((order: MockProps) => order.canOpenOrder),
+          )}
+        </div>
+        <div data-testid="order-history-props">
+          {JSON.stringify({
+            canGoBack,
+            canLoadMore,
+            canOpenOrders,
+            isLoadMoreAvailableOffline,
+            isOffline,
+            state,
+          })}
+        </div>
+        <button onClick={onBack} type="button">
+          Order history back
+        </button>
+        <button
+          disabled={
+            !canOpenOrders ||
+            orders[0]?.canOpenOrder === false
+          }
+          onClick={() => onOpenOrder(orders[0]?.orderId ?? "")}
+          type="button"
+        >
+          Order history open first order
+        </button>
+        <button
+          onClick={() => onOpenOrder("unknown-order-id")}
+          type="button"
+        >
+          Order history open unknown order
+        </button>
+        <button onClick={onLoadMore} type="button">
+          Order history load more
+        </button>
+        <button onClick={onRetryLoad} type="button">
+          Order history retry
+        </button>
+      </section>
+    )
+  },
 }))
 
 vi.mock("@/components/product-detail-screen", () => ({
@@ -778,11 +1036,49 @@ import Page from "./page"
 
 afterEach(() => {
   cleanup()
+  mockData.initialScreenOverride = null
+  mockData.selectedShippingOptionOverride = null
+  mockData.useStateCall = 0
   vi.restoreAllMocks()
 })
 
 function renderPage() {
   const user = userEvent.setup()
+  mockData.initialScreenOverride = null
+  mockData.selectedShippingOptionOverride = null
+  mockData.useStateCall = 0
+  render(<Page />)
+  return user
+}
+
+function renderPageWithInitialScreen(initialScreen: string) {
+  const user = userEvent.setup()
+  mockData.initialScreenOverride = initialScreen
+  mockData.selectedShippingOptionOverride = null
+  mockData.useStateCall = 0
+  render(<Page />)
+  return user
+}
+
+function renderPageWithInitialShippingOption(
+  selectedShippingOptionId: string,
+) {
+  const user = userEvent.setup()
+  mockData.initialScreenOverride = null
+  mockData.selectedShippingOptionOverride = selectedShippingOptionId
+  mockData.useStateCall = 0
+  render(<Page />)
+  return user
+}
+
+function renderPageWithInitialScreenAndShippingOption(
+  initialScreen: string,
+  selectedShippingOptionId: string,
+) {
+  const user = userEvent.setup()
+  mockData.initialScreenOverride = initialScreen
+  mockData.selectedShippingOptionOverride = selectedShippingOptionId
+  mockData.useStateCall = 0
   render(<Page />)
   return user
 }
@@ -903,6 +1199,34 @@ function getProgressReport() {
   }
 }
 
+function getOrderDetailsReport() {
+  return {
+    itemNames: getJson("order-details-item-names"),
+    orderId: screen.getByTestId("order-details-order-id").textContent ?? "",
+    props: getJson("order-details-props"),
+    referenceLabel:
+      screen.getByTestId("order-details-reference-label").textContent ?? "",
+    report: getJson("order-details-report"),
+    shippingUpdateLabels: getJson("order-details-shipping-update-labels"),
+    statusLabel:
+      screen.getByTestId("order-details-status-label").textContent ?? "",
+    totalLabel:
+      screen.getByTestId("order-details-total-label").textContent ?? "",
+  }
+}
+
+function getOrderHistoryReport() {
+  return {
+    orderIds: getJson("order-history-order-ids"),
+    openAvailability: getJson("order-history-open-availability"),
+    props: getJson("order-history-props"),
+    referenceLabels: getJson("order-history-reference-labels"),
+    report: getJson("order-history-report"),
+    statusLabels: getJson("order-history-status-labels"),
+    totalLabels: getJson("order-history-total-labels"),
+  }
+}
+
 function getBodyTextOutsideProfileManagementReport() {
   const renderedOutsideReport = document.body.cloneNode(true) as HTMLElement
   renderedOutsideReport
@@ -951,6 +1275,24 @@ async function goToProgress(user: User) {
   await goToDashboard(user)
   await user.click(screen.getByRole("button", { name: "Dashboard open progress" }))
   expect(screen.getByTestId("progress-tracking-screen")).toBeInTheDocument()
+}
+
+async function goToDashboardOrderDetails(user: User) {
+  await goToDashboard(user)
+  await user.click(screen.getByRole("button", { name: "Dashboard open recent order" }))
+  expect(screen.getByTestId("order-details-screen")).toBeInTheDocument()
+}
+
+async function goToDashboardOrderHistory(user: User) {
+  await goToDashboard(user)
+  await user.click(screen.getByRole("button", { name: "Dashboard open orders" }))
+  expect(screen.getByTestId("order-history-screen")).toBeInTheDocument()
+}
+
+function goToOrderConfirmation() {
+  const user = renderPageWithInitialScreen("order-confirmation")
+  expect(screen.getByTestId("order-result-screen")).toBeInTheDocument()
+  return user
 }
 
 describe("Page route controller", () => {
@@ -1075,13 +1417,590 @@ describe("Page route controller", () => {
     expect(screen.getByTestId("store-screen")).toBeInTheDocument()
   })
 
-  it("enables Dashboard Progress while keeping order routes blocked", async () => {
+  it("enables Dashboard Progress, Orders, and Recent-order details", async () => {
     const user = renderPage()
     await goToDashboard(user)
 
     expect(screen.getByRole("button", { name: "Dashboard open progress" })).toBeEnabled()
-    expect(screen.getByRole("button", { name: "Dashboard open orders" })).toBeDisabled()
-    expect(screen.getByRole("button", { name: "Dashboard open recent order" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Dashboard open orders" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Dashboard open recent order" })).toBeEnabled()
+  })
+
+  it("routes Dashboard Orders to static host-shaped Order history", async () => {
+    const user = renderPage()
+    await goToDashboardOrderHistory(user)
+
+    expect(getOrderHistoryReport()).toMatchObject({
+      orderIds: ["order-001", "order-002"],
+      referenceLabels: [
+        "DL-2024-001234",
+        "DL-2024-001233",
+      ],
+      statusLabels: [
+        "Host status: preparing order items",
+        "Host status: historical order summary",
+      ],
+      totalLabels: ["$93.50", "$18.00"],
+      openAvailability: [true, false],
+      props: {
+        canGoBack: true,
+        canLoadMore: true,
+        canOpenOrders: true,
+        isLoadMoreAvailableOffline: false,
+        isOffline: false,
+        state: "ready",
+      },
+    })
+  })
+
+  it("keeps Express order-history totals coherent with Screen 24 details", async () => {
+    const user = renderPageWithInitialShippingOption(
+      "shipopt-002",
+    )
+
+    await goToDashboardOrderHistory(user)
+
+    expect(getOrderHistoryReport().totalLabels).toEqual([
+      "$102.50",
+      "$18.00",
+    ])
+
+    await user.click(screen.getByRole("button", { name: "Order history open first order" }))
+
+    expect(getOrderDetailsReport().report.receipt).toMatchObject({
+      subtotalLabel: "$85.00",
+      shippingLabel: "$9.00",
+      taxLabel: "$8.50",
+      totalLabel: "$102.50",
+    })
+  })
+
+  it("returns from Order history Back to the dashboard", async () => {
+    const user = renderPage()
+    await goToDashboardOrderHistory(user)
+
+    await user.click(screen.getByRole("button", { name: "Order history back" }))
+
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+  })
+
+  it("returns from Order details Back to Order history after history View details", async () => {
+    const user = renderPage()
+    await goToDashboardOrderHistory(user)
+    const historyReport = getOrderHistoryReport()
+
+    await user.click(screen.getByRole("button", { name: "Order history open first order" }))
+
+    expect(screen.getByTestId("order-details-screen")).toBeInTheDocument()
+    expect(getOrderDetailsReport().orderId).toBe("order-001")
+
+    await user.click(screen.getByRole("button", { name: "Order details back" }))
+
+    expect(screen.getByTestId("order-history-screen")).toBeInTheDocument()
+    expect(getOrderHistoryReport()).toMatchObject(historyReport)
+  })
+
+  it("blocks unknown Order-history order IDs without leaving history", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToDashboardOrderHistory(user)
+    const historyReport = getOrderHistoryReport()
+
+    await user.click(screen.getByRole("button", { name: "Order history open unknown order" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Order details route failed closed:",
+      "unknown-order-id",
+    )
+    expect(screen.getByTestId("order-history-screen")).toBeInTheDocument()
+    expect(screen.queryByTestId("order-details-screen")).not.toBeInTheDocument()
+    expect(getOrderHistoryReport()).toMatchObject(historyReport)
+  })
+
+  it("keeps the historical order readable while its detail route stays unavailable", async () => {
+    const user = renderPage()
+    await goToDashboardOrderHistory(user)
+
+    expect(getOrderHistoryReport()).toMatchObject({
+      orderIds: ["order-001", "order-002"],
+      referenceLabels: [
+        "DL-2024-001234",
+        "DL-2024-001233",
+      ],
+      openAvailability: [true, false],
+    })
+  })
+
+  it("keeps Order-history Load more as a future-adapter log only", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToDashboardOrderHistory(user)
+    const historyReport = getOrderHistoryReport()
+
+    await user.click(screen.getByRole("button", { name: "Order history load more" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Loading more order-history entries through future adapter.",
+    )
+    expect(screen.getByTestId("order-history-screen")).toBeInTheDocument()
+    expect(getOrderHistoryReport()).toMatchObject(historyReport)
+  })
+
+  it("keeps Order-history Retry as a future-adapter log only", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToDashboardOrderHistory(user)
+
+    await user.click(screen.getByRole("button", { name: "Order history retry" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Retrying order-history load through future adapter.",
+    )
+    expect(screen.getByTestId("order-history-screen")).toBeInTheDocument()
+  })
+
+  it("routes Dashboard recent order to static host-shaped Order details", async () => {
+    const user = renderPage()
+    await goToDashboardOrderDetails(user)
+
+    expect(getOrderDetailsReport()).toMatchObject({
+      orderId: "order-001",
+      referenceLabel: "DL-2024-001234",
+      statusLabel: "Host status: preparing order items",
+      itemNames: [
+        "Gentle Foaming Cleanser",
+        "Invisible Shield SPF 50",
+        "Hyaluronic Boost Serum",
+      ],
+      shippingUpdateLabels: [
+        "Order received by DermaLens",
+        "Preparing order items",
+      ],
+      totalLabel: "$93.50",
+      props: {
+        canDownloadReceipt: true,
+        canGoBack: true,
+        canOpenSupport: true,
+        isOffline: false,
+        isReceiptDownloadAvailableOffline: false,
+        state: "ready",
+      },
+    })
+  })
+
+  it("keeps Dashboard recent Order details coherent with the selected Express receipt snapshot", async () => {
+    const user = renderPageWithInitialShippingOption(
+      "shipopt-002",
+    )
+
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard open recent order" }))
+
+    expect(getOrderDetailsReport().report.receipt).toMatchObject({
+      subtotalLabel: "$85.00",
+      shippingLabel: "$9.00",
+      taxLabel: "$8.50",
+      totalLabel: "$102.50",
+    })
+  })
+
+  it("returns from Dashboard Order details Back to the dashboard", async () => {
+    const user = renderPage()
+    await goToDashboardOrderDetails(user)
+
+    await user.click(screen.getByRole("button", { name: "Order details back" }))
+
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+  })
+
+  it("blocks unknown Dashboard recent-order IDs without leaving the dashboard", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard open unknown recent order" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Order details route failed closed:",
+      "unknown-order-id",
+    )
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+    expect(screen.queryByTestId("order-details-screen")).not.toBeInTheDocument()
+  })
+
+  it("routes confirmed payment-result View order to Order details and Back to confirmation", async () => {
+    const user = goToOrderConfirmation()
+
+    await user.click(screen.getByRole("button", { name: "Order result view order" }))
+
+    expect(getOrderDetailsReport()).toMatchObject({
+      orderId: "order-001",
+      referenceLabel: "DL-2024-001234",
+      statusLabel: "Host status: preparing order items",
+      itemNames: [
+        "Gentle Foaming Cleanser",
+        "Invisible Shield SPF 50",
+        "Hyaluronic Boost Serum",
+      ],
+      shippingUpdateLabels: [
+        "Order received by DermaLens",
+        "Preparing order items",
+      ],
+      totalLabel: "$93.50",
+    })
+
+    await user.click(screen.getByRole("button", { name: "Order details back" }))
+
+    expect(screen.getByTestId("order-result-screen")).toBeInTheDocument()
+    expect(screen.queryByTestId("order-details-screen")).not.toBeInTheDocument()
+  })
+
+  it("blocks unknown confirmed-result order IDs without leaving confirmation", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = goToOrderConfirmation()
+
+    await user.click(screen.getByRole("button", { name: "Order result view unknown order" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Order details route failed closed:",
+      "unknown-order-id",
+    )
+    expect(screen.getByTestId("order-result-screen")).toBeInTheDocument()
+    expect(screen.queryByTestId("order-details-screen")).not.toBeInTheDocument()
+  })
+
+  it("keeps Order-details Support as a future-adapter log only", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToDashboardOrderDetails(user)
+
+    await user.click(screen.getByRole("button", { name: "Order details open support" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Opening order support through future adapter:",
+      "order-001",
+    )
+    expect(screen.getByTestId("order-details-screen")).toBeInTheDocument()
+  })
+
+  it("guards stale Order-details Support context", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToDashboardOrderDetails(user)
+    const initialReport = getOrderDetailsReport()
+
+    await user.click(screen.getByRole("button", { name: "Order details open support with stale order" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Order support route failed closed:",
+      "unknown-order-id",
+    )
+    expect(screen.getByTestId("order-details-screen")).toBeInTheDocument()
+    expect(getOrderDetailsReport()).toMatchObject(initialReport)
+  })
+
+  it("keeps Order-details receipt download as a future-adapter log only", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToDashboardOrderDetails(user)
+
+    await user.click(screen.getByRole("button", { name: "Order details download receipt" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Requesting receipt download through future adapter:",
+      "order-001",
+    )
+    expect(screen.getByTestId("order-details-screen")).toBeInTheDocument()
+  })
+
+  it("guards stale Order-details receipt-download context", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToDashboardOrderDetails(user)
+    const initialReport = getOrderDetailsReport()
+
+    await user.click(screen.getByRole("button", { name: "Order details download receipt with stale order" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Receipt-download route failed closed:",
+      "unknown-order-id",
+    )
+    expect(screen.getByTestId("order-details-screen")).toBeInTheDocument()
+    expect(getOrderDetailsReport()).toMatchObject(initialReport)
+  })
+
+  it("keeps Order-details Retry as a future-adapter log only", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const user = renderPage()
+    await goToDashboardOrderDetails(user)
+
+    await user.click(screen.getByRole("button", { name: "Order details retry" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Retrying order-details load through future adapter.",
+    )
+    expect(screen.getByTestId("order-details-screen")).toBeInTheDocument()
+  })
+
+  it("keeps Order-details fixtures static across Dashboard and confirmed-result entry", async () => {
+    const dashboardUser = renderPage()
+    await goToDashboardOrderDetails(dashboardUser)
+    const dashboardReport = getOrderDetailsReport()
+
+    cleanup()
+
+    const confirmationUser = goToOrderConfirmation()
+    await confirmationUser.click(screen.getByRole("button", { name: "Order result view order" }))
+    const confirmationReport = getOrderDetailsReport()
+
+    expect(confirmationReport).toMatchObject({
+      itemNames: dashboardReport.itemNames,
+      shippingUpdateLabels: dashboardReport.shippingUpdateLabels,
+      totalLabel: dashboardReport.totalLabel,
+    })
+    expect(confirmationReport.report.items.map((item: MockProps) => item.quantityLabel)).toEqual([
+      "Host quantity: 1",
+      "Host quantity: 1",
+      "Host quantity: 1",
+    ])
+    expect(confirmationReport.report.receipt).toMatchObject({
+      subtotalLabel: "$85.00",
+      shippingLabel: "Free",
+      taxLabel: "$8.50",
+      totalLabel: "$93.50",
+    })
+  })
+
+  it("keeps the default confirmed order coherent with Screen 24 details", async () => {
+    const user = goToOrderConfirmation()
+    const orderResultReport = getJson("order-result-report")
+
+    expect(orderResultReport).toMatchObject({
+      orderId: "order-001",
+      orderReferenceLabel: "DL-2024-001234",
+      itemCount: 3,
+      totalLabel: "$93.50",
+    })
+
+    await user.click(screen.getByRole("button", { name: "Order result view order" }))
+
+    const orderDetailsReport = getOrderDetailsReport()
+
+    expect(orderDetailsReport.report).toMatchObject({
+      orderId: "order-001",
+      orderReferenceLabel: "DL-2024-001234",
+      receipt: {
+        totalLabel: "$93.50",
+      },
+    })
+    expect(orderDetailsReport.report.items).toHaveLength(3)
+    expect(orderDetailsReport.itemNames).toEqual([
+      "Gentle Foaming Cleanser",
+      "Invisible Shield SPF 50",
+      "Hyaluronic Boost Serum",
+    ])
+  })
+
+  it("keeps Express confirmed order coherent with Screen 24 details", async () => {
+    const user = renderPageWithInitialScreenAndShippingOption(
+      "order-confirmation",
+      "shipopt-002",
+    )
+
+    const orderResultReport = getJson("order-result-report")
+
+    expect(orderResultReport).toMatchObject({
+      orderId: "order-001",
+      orderReferenceLabel: "DL-2024-001234",
+      itemCount: 3,
+      totalLabel: "$102.50",
+      deliverySummaryLabel: "Express delivery to your address",
+      estimatedDeliveryLabel: "Estimated delivery: 2-3 business days",
+    })
+
+    await user.click(screen.getByRole("button", { name: "Order result view order" }))
+
+    const orderDetailsReport = getOrderDetailsReport()
+
+    expect(orderDetailsReport.report).toMatchObject({
+      orderId: "order-001",
+      orderReferenceLabel: "DL-2024-001234",
+      receipt: {
+        subtotalLabel: "$85.00",
+        shippingLabel: "$9.00",
+        taxLabel: "$8.50",
+        totalLabel: "$102.50",
+      },
+    })
+    expect(orderDetailsReport.itemNames).toEqual([
+      "Gentle Foaming Cleanser",
+      "Invisible Shield SPF 50",
+      "Hyaluronic Boost Serum",
+    ])
+  })
+
+  it("keeps Order-details integration inside host-owned architecture boundaries", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const fetchSpy = vi.fn()
+    const storageSet = vi.spyOn(Storage.prototype, "setItem")
+    const storageGet = vi.spyOn(Storage.prototype, "getItem")
+    const indexedDbOpen = vi.fn()
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null)
+    const setIntervalSpy = vi.spyOn(window, "setInterval")
+    const originalCookie = document.cookie
+    const originalFetch = globalThis.fetch
+    const originalGeolocation = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "geolocation",
+    )
+    const originalIndexedDb = Object.getOwnPropertyDescriptor(window, "indexedDB")
+    const originalMediaDevices = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "mediaDevices",
+    )
+    const originalFileReader = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "FileReader",
+    )
+    const geolocation = {
+      getCurrentPosition: vi.fn(),
+      watchPosition: vi.fn(),
+    }
+    const mediaDevices = {
+      getUserMedia: vi.fn(),
+    }
+    const FileReaderSpy = vi.fn()
+
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: fetchSpy,
+    })
+    Object.defineProperty(window, "indexedDB", {
+      configurable: true,
+      value: { open: indexedDbOpen },
+    })
+    Object.defineProperty(window.navigator, "geolocation", {
+      configurable: true,
+      value: geolocation,
+    })
+    Object.defineProperty(window.navigator, "mediaDevices", {
+      configurable: true,
+      value: mediaDevices,
+    })
+    Object.defineProperty(globalThis, "FileReader", {
+      configurable: true,
+      value: FileReaderSpy,
+    })
+
+    try {
+      const dashboardUser = renderPage()
+      await goToDashboard(dashboardUser)
+      setIntervalSpy.mockClear()
+      await dashboardUser.click(screen.getByRole("button", { name: "Dashboard open orders" }))
+      const initialHistoryReport = getOrderHistoryReport()
+      const orderHistoryText =
+        screen.getByTestId("order-history-screen").textContent ?? ""
+      expect(orderHistoryText).not.toContain("trackingUrl")
+      expect(orderHistoryText).not.toContain("receiptUrl")
+      expect(orderHistoryText).not.toContain("payment-001")
+      expect(orderHistoryText).not.toContain("gatewaySessionId")
+      expect(orderHistoryText).not.toContain("transactionId")
+      expect(orderHistoryText).not.toContain("Screen 26")
+      await dashboardUser.click(screen.getByRole("button", { name: "Order history load more" }))
+      await dashboardUser.click(screen.getByRole("button", { name: "Order history retry" }))
+      await dashboardUser.click(screen.getByRole("button", { name: "Order history open unknown order" }))
+      expect(getOrderHistoryReport()).toMatchObject(initialHistoryReport)
+      await dashboardUser.click(screen.getByRole("button", { name: "Order history open first order" }))
+      expect(screen.getByTestId("order-details-screen")).toBeInTheDocument()
+      await dashboardUser.click(screen.getByRole("button", { name: "Order details back" }))
+      expect(screen.getByTestId("order-history-screen")).toBeInTheDocument()
+      expect(getOrderHistoryReport()).toMatchObject(initialHistoryReport)
+      await dashboardUser.click(screen.getByRole("button", { name: "Order history back" }))
+      expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+      await dashboardUser.click(screen.getByRole("button", { name: "Dashboard open recent order" }))
+      expect(screen.getByTestId("order-details-screen")).toBeInTheDocument()
+      await dashboardUser.click(screen.getByRole("button", { name: "Order details open support" }))
+      await dashboardUser.click(screen.getByRole("button", { name: "Order details download receipt" }))
+      await dashboardUser.click(screen.getByRole("button", { name: "Order details retry" }))
+      await dashboardUser.click(screen.getByRole("button", { name: "Order details back" }))
+      await dashboardUser.click(screen.getByRole("button", { name: "Dashboard open unknown recent order" }))
+
+      cleanup()
+
+      const confirmationUser = goToOrderConfirmation()
+      await confirmationUser.click(screen.getByRole("button", { name: "Order result view order" }))
+      await confirmationUser.click(screen.getByRole("button", { name: "Order details open support with stale order" }))
+      await confirmationUser.click(screen.getByRole("button", { name: "Order details download receipt with stale order" }))
+      await confirmationUser.click(screen.getByRole("button", { name: "Order details back" }))
+
+      const bodyText = document.body.textContent ?? ""
+      expect(fetchSpy).not.toHaveBeenCalled()
+      expect(storageSet).not.toHaveBeenCalled()
+      expect(storageGet).not.toHaveBeenCalled()
+      expect(indexedDbOpen).not.toHaveBeenCalled()
+      expect(document.cookie).toBe(originalCookie)
+      expect(geolocation.getCurrentPosition).not.toHaveBeenCalled()
+      expect(geolocation.watchPosition).not.toHaveBeenCalled()
+      expect(mediaDevices.getUserMedia).not.toHaveBeenCalled()
+      expect(FileReaderSpy).not.toHaveBeenCalled()
+      expect(openSpy).not.toHaveBeenCalled()
+      expect(setIntervalSpy).not.toHaveBeenCalled()
+      expect(document.querySelector('input[type="file"]')).toBeNull()
+      expect(bodyText).not.toContain("trackingUrl")
+      expect(bodyText).not.toContain("receiptUrl")
+      expect(bodyText).not.toContain("payment-001")
+      expect(bodyText).not.toContain("gatewaySessionId")
+      expect(bodyText).not.toContain("transactionId")
+      expect(bodyText).not.toContain("Screen 26")
+      expect(logSpy).toHaveBeenCalledWith(
+        "Opening order support through future adapter:",
+        "order-001",
+      )
+      expect(logSpy).toHaveBeenCalledWith(
+        "Requesting receipt download through future adapter:",
+        "order-001",
+      )
+      expect(logSpy).toHaveBeenCalledWith(
+        "Loading more order-history entries through future adapter.",
+      )
+      expect(logSpy).toHaveBeenCalledWith(
+        "Retrying order-history load through future adapter.",
+      )
+    } finally {
+      if (originalFetch) {
+        Object.defineProperty(globalThis, "fetch", {
+          configurable: true,
+          value: originalFetch,
+        })
+      } else {
+        delete (globalThis as { fetch?: unknown }).fetch
+      }
+
+      if (originalIndexedDb) {
+        Object.defineProperty(window, "indexedDB", originalIndexedDb)
+      } else {
+        delete (window as unknown as { indexedDB?: unknown }).indexedDB
+      }
+
+      if (originalGeolocation) {
+        Object.defineProperty(window.navigator, "geolocation", originalGeolocation)
+      } else {
+        delete (window.navigator as unknown as { geolocation?: unknown }).geolocation
+      }
+
+      if (originalMediaDevices) {
+        Object.defineProperty(window.navigator, "mediaDevices", originalMediaDevices)
+      } else {
+        delete (window.navigator as unknown as { mediaDevices?: unknown }).mediaDevices
+      }
+
+      if (originalFileReader) {
+        Object.defineProperty(globalThis, "FileReader", originalFileReader)
+      } else {
+        delete (globalThis as { FileReader?: unknown }).FileReader
+      }
+    }
   })
 
   it("routes Dashboard Progress to progress tracking and Back to dashboard", async () => {
@@ -2242,30 +3161,31 @@ describe("Page route controller", () => {
     expect(screen.getByTestId("routine-screen")).toBeInTheDocument()
   })
 
-  it("passes host-owned dashboard fixture data and keeps future order routes blocked", async () => {
+  it("passes host-owned dashboard fixture data and enables Orders route", async () => {
     const user = renderPage()
     await goToDashboard(user)
 
     const props = getJson("dashboard-props")
     expect(props).toMatchObject({
       canOpenGuestScanner: true,
-      canOpenOrders: false,
+      canOpenOrders: true,
       canOpenProgress: true,
-      canOpenRecentOrder: false,
+      canOpenRecentOrder: true,
       isGuestScannerAvailableOffline: false,
       showEnvironmentalModule: false,
     })
 
     expect(screen.getByRole("button", { name: "Open dashboard ingredient scanner" })).toBeEnabled()
     expect(screen.getByRole("button", { name: "Dashboard open progress" })).toBeEnabled()
-    expect(screen.getByRole("button", { name: "Dashboard open orders" })).toBeDisabled()
-    expect(screen.getByRole("button", { name: "Dashboard open recent order" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Dashboard open orders" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Dashboard open recent order" })).toBeEnabled()
 
     const report = getJson("dashboard-report")
     expect(report.profile.profileId).toBe("profile-001")
     expect(report.latestSnapshot.reportId).toBe("report-001")
     expect(report.routine.routineId).toBe("routine-001")
     expect(report.recentOrder.orderId).toBe("order-001")
+    expect(report.recentOrder.statusLabel).toBe("Host status: preparing order items")
 
     const renderedOutsideReport = document.body.cloneNode(true) as HTMLElement
     renderedOutsideReport.querySelector('[data-testid="dashboard-report"]')?.remove()
@@ -2399,6 +3319,8 @@ describe("Page route controller", () => {
     await user.click(screen.getByRole("button", { name: "Open payment gateway" }))
     expect(screen.getByTestId("payment-gateway-screen")).toBeInTheDocument()
     expect(screen.queryByTestId("order-result-screen")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("order-details-screen")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("order-history-screen")).not.toBeInTheDocument()
   })
 
   it("opens product detail from routine and returns back to routine", async () => {

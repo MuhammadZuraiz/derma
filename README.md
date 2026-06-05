@@ -19,6 +19,8 @@ Checkout pricing remains host-supplied display data, and the screen never calcul
 
 Opaque checkout IDs are passed into callbacks for host adapters but are not rendered manually by the route controller. Secure payment still requires an explicit user click on the payment-handoff screen. Opening the gateway does not infer successful payment, and order confirmation remains the host-owned provider-return destination after the latest payment result has been retrieved.
 
+Confirmed payment results now expose an explicit View order action that opens `OrderDetailsScreen` through the demo route controller. This remains user-activated only; opening the payment gateway still does not automatically route to order confirmation or order details.
+
 ## Product Detail Route Integration
 
 The current demo controller routes product detail entry points as:
@@ -81,6 +83,8 @@ Latest report -> ResultsSummaryScreen
 Active routine -> RoutineRecommendationsScreen
 Ingredient scanner -> GuestIngredientScannerEntryScreen
 Progress -> ProgressTrackingScreen
+Orders -> OrderHistoryScreen
+Recent order details -> OrderDetailsScreen
 Store -> DermaLensStoreRoutineCollectionScreen
 ```
 
@@ -88,7 +92,7 @@ The demo route controller owns source-aware Back context for routes that can now
 
 Dashboard active-profile context now follows the controller-owned managed-profile selection. Selecting a known managed profile updates the in-memory active opaque profile ID used by the dashboard report, and Dashboard Start new scan passes that currently active profile ID into its callback. Known demo managed-profile labels are also held in controller-owned in-memory fixture state, so switching away from the primary profile and back does not silently reset its saved demo name.
 
-Dashboard Progress is now enabled and opens `ProgressTrackingScreen` with the active managed profile supplied as host-shaped progress context. Orders and Recent-order details remain visible but disabled because those future routes are not integrated into the demo route controller yet. The Dashboard ingredient scanner route is enabled and opens `GuestIngredientScannerEntryScreen` with the active managed profile supplied as optional local-profile context.
+Dashboard Progress is now enabled and opens `ProgressTrackingScreen` with the active managed profile supplied as host-shaped progress context. Orders is enabled and opens `OrderHistoryScreen` as the broader first-party order-list route. Recent-order details remains enabled as a direct `OrderDetailsScreen` shortcut for the known fixed demo order. The Dashboard ingredient scanner route is enabled and opens `GuestIngredientScannerEntryScreen` with the active managed profile supplied as optional local-profile context.
 
 The screen preserves the local-first helper copy, `Your profile stays local unless you choose to sync it.`, and positions sync as optional. UV/AQI content remains behind `showEnvironmentalModule`; when the flag is false, environmental payloads are not rendered, and the screen never requests location data or fetches environmental values directly.
 
@@ -356,34 +360,90 @@ You appear to be offline. Supplied progress snapshots remain readable. The host 
 
 Back, Start a new scan, Select baseline, Select comparison, Open report, Open routine, and Retry are all explicit user-activated callbacks. The component uses StrictMode-safe mounted tracking, duplicate-activation protection, action-scoped pending labels, contextual repeated-control accessible names, and callback-rejection toasts. Opaque profile IDs, scan IDs, metric IDs, and routine IDs remain callback-only context and are not rendered manually.
 
-No host-adapter module, shared component extraction, Screen 24, persistence, API call, geolocation request, camera access, picker access, file input, browser-history API, routing library, external navigation, Store route from Progress, progress inference, trend calculation, score calculation, delta calculation, adherence calculation, improvement inference, deterioration inference, scan ranking, scan grouping, recommendation generation, affiliate route, marketplace route, external seller route, sponsored content, or medical-monitoring claim was introduced. The standalone regression suite lives at `components/progress-tracking-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
+No host-adapter module, shared component extraction, Screen 24 route integration, persistence, API call, geolocation request, camera access, picker access, file input, browser-history API, routing library, external navigation, Store route from Progress, progress inference, trend calculation, score calculation, delta calculation, adherence calculation, improvement inference, deterioration inference, scan ranking, scan grouping, recommendation generation, affiliate route, marketplace route, external seller route, sponsored content, or medical-monitoring claim was introduced during the ProgressTrackingScreen integration checkpoint. Screen 24 now exists separately as the standalone `OrderDetailsScreen` documented below. The standalone Screen 23 regression suite lives at `components/progress-tracking-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
 
 ## OrderDetailsScreen Integration
 
-`OrderDetailsScreen` is Screen 24, the first-party order-details destination for an existing DermaLens order. It exists as a standalone component and is not yet integrated into `app/page.tsx`.
+`OrderDetailsScreen` is Screen 24, the first-party order-details destination for an existing DermaLens order. It is now integrated into `app/page.tsx` through guarded, controller-owned in-memory demo context.
 
-Intended future entries:
+Current demo entries:
 
 ```text
 OrderConfirmationAndPaymentResultScreen
--> confirmed order
+-> confirmed result explicit View order
 -> OrderDetailsScreen
+-> Back
+-> OrderConfirmationAndPaymentResultScreen
 
 HomeDashboardScreen
 -> Recent order details
 -> OrderDetailsScreen
+-> Back
+-> HomeDashboardScreen
+
+HomeDashboardScreen
+-> Orders
+-> OrderHistoryScreen
+-> View order details
+-> OrderDetailsScreen
+-> Back
+-> OrderHistoryScreen
 ```
 
-Dashboard Orders remains a separate blocked future order-history route. Screen 24 does not add an order-history route, Screen 25, or another future route.
+Dashboard Orders now opens `OrderHistoryScreen`; Dashboard Recent-order details remains a direct Screen 24 shortcut. Screen 24 does not add another future route.
 
-The host owns order ID, order-reference label, status label and tone, item order, item labels, delivery-address summary, shipping-update order, shipping-update labels, receipt labels, support availability, receipt-download availability, offline capability, persistence, logistics retrieval, payment-result retrieval, and routing. Opaque order, line-item, and update IDs remain callback-only context and are never rendered directly.
+The host owns order ID, order-reference label, status label and tone, item order, item labels, delivery-address summary, shipping-update order, shipping-update labels, receipt labels, support availability, receipt-download availability, offline capability, persistence, logistics retrieval, payment-result retrieval, and routing. Opaque order, line-item, and update IDs remain callback-only context and are never rendered directly. The demo reuses the fixed known opaque order ID from Dashboard recent order and the confirmed payment-result fixture; unknown IDs fail closed instead of substituting another order.
+
+The route controller supplies static host-shaped details only: fixed received-order item labels, fixed received-order shipping updates, fixed receipt labels, and fixed status copy. It does not calculate totals, shipping, tax, subtotal, or quantities, and it does not infer payment success, shipment status, delivery timing, or receipt availability.
+
+The fixed `order-001` Screen 24 fixture uses one fixed received item set for every entry. Screen 24 selects a static host-shaped receipt snapshot from the controller-owned shipping option: Standard delivery keeps `Shipping: Free` and `Total: $93.50`, while Express delivery keeps `Shipping: $9.00` and `Total: $102.50`. Dashboard Recent-order details and confirmed-result explicit View order stay coherent with the selected static receipt snapshot. This coherence is achieved through static host-shaped fixture labels only; no arithmetic calculation, reducer, item-derived total, logistics retrieval, persistence, or payment inference was introduced.
 
 Line items and shipping updates render in the received host order. Malformed line-item entries remain in place with neutral fallback cards such as `Unnamed product` and `Quantity unavailable`; malformed shipping updates remain in place with neutral `Update unavailable` and `Time unavailable` copy. The screen does not sort, filter, group, rank, or derive order data locally.
 
 Item-image recovery is independent per card. A missing, whitespace-only, or failed image URL renders the local `Item image unavailable` placeholder. Replacement image URLs receive a fresh attempt. When line-item IDs are malformed or duplicated, received-position fallback is used only for view-local image recovery and never for callbacks or host IDs.
 
-The empty-items state is readable and neutral for both explicit `state="empty"` and ready reports with `items: []`. Supplied delivery address, shipping updates, receipt summary, Back, support, receipt-download action, and toast region remain governed by host availability. Offline status is informational: supplied order details remain readable, Back and support follow host flags, and receipt download uses a distinct offline capability flag.
+The empty-items state is readable and neutral for both explicit `state="empty"` and ready reports with `items: []`. Explicit `state="empty"` is authoritative for the item-list region, so it renders the empty-items card even if a stale runtime report still contains item entries. Supplied status, delivery address, shipping updates, receipt summary, Back, support, receipt-download action, and toast region remain governed by host availability. Offline status is informational: supplied order details remain readable, Back and support follow host flags, and receipt download uses a distinct offline capability flag.
 
-Support is a host-owned callback that passes only the usable `orderId`. Receipt download is also host-owned, passes only the usable `orderId`, has its own offline capability, and does not synthesize or persist a receipt. Callback failures become readable non-blocking toasts.
+Support is a host-owned callback that passes only the usable `orderId`. In the current demo, Support remains a future-adapter log only and stays on Order details. Receipt download is also host-owned, passes only the usable `orderId`, has its own offline capability, and does not synthesize or persist a receipt. In the current demo, receipt download remains a future-adapter log only and stays on Order details. Retry also remains a future-adapter log only and does not fetch. Primitive, array, and null receipt contexts fail closed: they omit the receipt card and cannot activate receipt download. A malformed plain receipt object may still render the receipt card with `Total unavailable` while retaining the normal host-controlled download route. Callback failures become readable non-blocking toasts.
 
-No total calculation, shipping calculation, tax calculation, subtotal calculation, quantity calculation, direct logistics API call, polling, API call, persistence, external navigation, raw tracking URL, raw receipt URL, exposed payment-session ID, gateway ID, transaction ID, camera access, picker access, file input, forced sign-in, affiliate route, marketplace route, external-seller route, or sponsored route was introduced. The standalone regression suite lives at `components/order-details-screen.test.tsx`.
+No receipt synthesis, total calculation, shipping calculation, tax calculation, subtotal calculation, quantity calculation, payment-success inference, shipment-status inference, direct logistics API call, polling, API call, persistence, external navigation, raw tracking URL, raw receipt URL, exposed payment-session ID, gateway ID, transaction ID, camera access, picker access, file input, forced sign-in, affiliate route, marketplace route, external-seller route, or sponsored route was introduced for Screen 24. Screen 25 is now integrated separately through Dashboard Orders and reuses Screen 24 only for the explicit View order details path. The standalone regression suite lives at `components/order-details-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
+
+## OrderHistoryScreen Integration
+
+`OrderHistoryScreen` is Screen 25, the first-party order-history destination now integrated into the demo Dashboard Orders route:
+
+```text
+HomeDashboardScreen
+-> Orders
+-> OrderHistoryScreen
+
+OrderHistoryScreen
+-> Back
+-> HomeDashboardScreen
+
+OrderHistoryScreen
+-> View order details
+-> OrderDetailsScreen
+-> Back
+-> OrderHistoryScreen
+
+OrderHistoryScreen
+-> Load more
+-> future-adapter log only
+
+OrderHistoryScreen
+-> Retry
+-> future-adapter log only
+```
+
+Dashboard Orders is now enabled. Dashboard Recent-order details continues to route directly into `OrderDetailsScreen`; Screen 25 is the broader first-party order-list surface.
+
+The screen helps customers review which DermaLens orders exist, when a host says they were placed, which visible reference and status labels are supplied, what summary and total labels the host provided, and whether a detailed order view can be opened. It routes onward to the existing `OrderDetailsScreen` instead of duplicating detailed item, receipt, support, or shipping-update content.
+
+The host owns the order list, received ordering, opaque order IDs, reference labels, status labels, placed-at labels, item-summary labels, total labels, status tones, per-order route availability, Load-more availability, offline capability, pagination, persistence, logistics retrieval, payment-result retrieval, and routing. Opaque order IDs remain callback-only context and are never rendered manually. In the demo, `order-001` is the known actionable details route and `order-002` remains visible but intentionally unavailable for details.
+
+Order cards render in received host order. Malformed order-list entries degrade into neutral fallback cards with `Order reference unavailable` and `Status unavailable` without filtering or reordering. Duplicated usable-looking order IDs remain readable in place but disable trust-critical View-order actions, including forced activation guards. Empty order history is a neutral readable state, and offline status is informational while supplied order cards remain readable.
+
+The first order total uses the selected static Standard or Express Screen 24 receipt snapshot supplied by the demo controller: Standard remains `$93.50`, and Express remains `$102.50`. Load more is host-owned, has a distinct offline capability flag, and remains a future-adapter log only in the demo; Retry also remains a future-adapter log only. The screen and controller do not perform local pagination, mutate the list, calculate totals, calculate quantities, calculate counts, infer status, infer payment success, infer shipment state, sort, filter, group, rank, call logistics APIs, poll, fetch, persist order data, open external navigation, render raw tracking URLs, render raw receipt URLs, expose payment IDs, introduce host-adapter modules, create Screen 26, or add marketplace, affiliate, external-seller, or sponsored routes.
+
+Back, View order details, Load more, and Retry are explicit user-activated callbacks with pending labels, duplicate-activation protection, conflicting-action disabling, StrictMode-safe mounted tracking, and callback-rejection toasts. Repeated View-order controls keep concise visible labels, while accessible names add the visible order reference exactly once so enabled, pending, and blocked order actions remain contextual without duplicate reference announcements. The standalone regression suite lives at `components/order-history-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.

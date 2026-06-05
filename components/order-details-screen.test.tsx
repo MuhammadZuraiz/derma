@@ -505,11 +505,15 @@ describe("line items", () => {
     expect(cards[5]).toHaveTextContent(
       "Valid after",
     );
-    expect(sourceText()).not.toContain(
+    const cardText = cards
+      .map((card) => card.textContent ?? "")
+      .join("");
+
+    expect(cardText).not.toContain(
       "unexpected",
     );
-    expect(sourceText()).not.toContain("42");
-    expect(sourceText()).not.toContain(
+    expect(cardText).not.toContain("42");
+    expect(cardText).not.toContain(
       "line-secret-after",
     );
   });
@@ -533,7 +537,7 @@ describe("line items", () => {
     expect(
       screen.queryByText("Variant"),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("$10")).toBeInTheDocument();
+    expect(screen.getAllByText("$10")).toHaveLength(2);
     expect(sourceText()).not.toContain(
       "line-secret-a",
     );
@@ -947,6 +951,42 @@ describe("receipt summary", () => {
     ).not.toBeInTheDocument();
   });
 
+  it.each([
+    null,
+    "unexpected",
+    42,
+    [],
+  ])("omits malformed receipt context %s and blocks download", (receipt) => {
+    const onDownloadReceipt = vi.fn();
+    renderScreen({
+      isOffline: true,
+      onDownloadReceipt,
+      report: reportWith({
+        receipt:
+          receipt as unknown as OrderDetailsReport["receipt"],
+      }),
+    });
+
+    expect(
+      screen.queryByText(copy.receiptHeading),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: copy.receiptReconnect,
+      }),
+    ).not.toBeInTheDocument();
+
+    const button = screen.getByRole("button", {
+      name: copy.receiptBlocked,
+    });
+    expect(button).toBeDisabled();
+
+    button.removeAttribute("disabled");
+    fireEvent.click(button);
+
+    expect(onDownloadReceipt).not.toHaveBeenCalled();
+  });
+
   it("renders host receipt labels unchanged", () => {
     renderScreen();
 
@@ -961,7 +1001,9 @@ describe("receipt summary", () => {
   });
 
   it("uses a safe total fallback and does not derive values from items", () => {
+    const onDownloadReceipt = vi.fn();
     renderScreen({
+      onDownloadReceipt,
       report: reportWith({
         receipt: {
           subtotalLabel: "$1",
@@ -978,6 +1020,16 @@ describe("receipt summary", () => {
     expect(
       screen.queryByText("$6"),
     ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: copy.downloadReceipt,
+      }),
+    );
+
+    expect(onDownloadReceipt).toHaveBeenCalledWith(
+      defaultReport.orderId,
+    );
   });
 });
 
@@ -1134,7 +1186,9 @@ describe("Support action", () => {
     expect(button).toBeDisabled();
     button.removeAttribute("disabled");
     fireEvent.click(button);
-    expect(callback).not.toHaveBeenCalled();
+    if (callback) {
+      expect(callback).not.toHaveBeenCalled();
+    }
   });
 
   it("does not invoke support with malformed required report", () => {
@@ -1377,6 +1431,55 @@ describe("Retry action", () => {
 });
 
 describe("empty item states", () => {
+  it("lets explicit empty state override a stale nonempty item array", () => {
+    renderScreen({
+      state: "empty",
+      report: reportWith({
+        items: defaultReport.items,
+      }),
+    });
+
+    expect(
+      screen.getByText(copy.emptyItemsHeading),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Gentle Foaming Cleanser"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Invisible Shield SPF 50"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        defaultReport.orderReferenceLabel,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(defaultReport.statusLabel),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(copy.deliveryHeading),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(copy.shippingHeading),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(copy.receiptHeading),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: copy.openSupport,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: copy.downloadReceipt,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("alert"),
+    ).not.toBeInTheDocument();
+  });
+
   it.each([
     {
       state: "empty" as const,

@@ -18,6 +18,12 @@ import CheckoutContactAndShippingScreen, { type CheckoutContactAndShippingReport
 import CheckoutReviewScreen, { type CheckoutReviewReport } from "@/components/checkout-review-screen"
 import SecurePaymentGatewayHandoffScreen, { type SecurePaymentGatewayHandoffReport } from "@/components/secure-payment-gateway-handoff-screen"
 import OrderConfirmationAndPaymentResultScreen, { type OrderPaymentResultReport } from "@/components/order-confirmation-and-payment-result-screen"
+import OrderDetailsScreen, {
+  type OrderDetailsReport,
+} from "@/components/order-details-screen"
+import OrderHistoryScreen, {
+  type OrderHistoryReport,
+} from "@/components/order-history-screen"
 import HomeDashboardScreen, { type HomeDashboardReport } from "@/components/home-dashboard-screen"
 import ProgressTrackingScreen, {
   type ProgressComparisonMetric,
@@ -37,9 +43,12 @@ import IngredientScannerResultsScreen, {
   type IngredientScannerResultsReport,
 } from "@/components/ingredient-scanner-results-screen"
 
-type Screen = "welcome" | "privacy-consent" | "profile-setup" | "image-source" | "camera" | "image-review" | "analysis" | "results-summary" | "full-report" | "routine" | "store" | "cart" | "product-detail" | "checkout-details" | "checkout-review" | "payment-gateway" | "order-confirmation" | "dashboard" | "progress-tracking" | "profile-management" | "ingredient-scanner-entry" | "ingredient-input-review" | "ingredient-scanner-results"
+type Screen = "welcome" | "privacy-consent" | "profile-setup" | "image-source" | "camera" | "image-review" | "analysis" | "results-summary" | "full-report" | "routine" | "store" | "cart" | "product-detail" | "checkout-details" | "checkout-review" | "payment-gateway" | "order-confirmation" | "order-details" | "order-history" | "dashboard" | "progress-tracking" | "profile-management" | "ingredient-scanner-entry" | "ingredient-input-review" | "ingredient-scanner-results"
 type ProductDetailSourceScreen = "routine" | "store" | "cart"
 type ManagedProfileId = "profile-001" | "profile-002"
+type DemoCheckoutShippingOptionId =
+  | "shipopt-001"
+  | "shipopt-002"
 type DemoProgressScanId =
   | "progress-scan-001"
   | "progress-scan-002"
@@ -51,6 +60,7 @@ type ImageSourceBackScreen = "profile-setup" | "dashboard" | "profile-management
 type RoutineBackScreen = "full-report" | "results-summary" | "dashboard" | "progress-tracking"
 type ResultsSummaryCloseScreen = "dashboard" | "progress-tracking"
 type StoreBackScreen = "routine" | "dashboard"
+type OrderDetailsBackScreen = "dashboard" | "order-confirmation" | "order-history"
 
 interface DemoIngredientInputDraft {
   draftId: string
@@ -71,6 +81,11 @@ interface DemoIngredientScannerResultContext {
   draftId: string
   sourceLabel: string
   selectedProfileId: ManagedProfileId | null
+}
+
+interface DemoOrderDetailsContext {
+  orderId: DemoOrderDetailsId
+  backScreen: OrderDetailsBackScreen
 }
 
 const sampleCountries = [
@@ -139,6 +154,118 @@ const sampleProgressScanIds = {
   second: "progress-scan-002",
   third: "progress-scan-003",
 } satisfies Record<"first" | "second" | "third", DemoProgressScanId>
+
+const sampleOrderDetailsReceiptsByShippingOptionId = {
+  "shipopt-001": {
+    subtotalLabel: "$85.00",
+    shippingLabel: "Free",
+    taxLabel: "$8.50",
+    totalLabel: "$93.50",
+    currencyLabel: "USD",
+    receiptLabel: "Receipt labels supplied by the demo host.",
+  },
+  "shipopt-002": {
+    subtotalLabel: "$85.00",
+    shippingLabel: "$9.00",
+    taxLabel: "$8.50",
+    totalLabel: "$102.50",
+    currencyLabel: "USD",
+    receiptLabel: "Receipt labels supplied by the demo host.",
+  },
+} satisfies Record<
+  DemoCheckoutShippingOptionId,
+  NonNullable<OrderDetailsReport["receipt"]>
+>
+
+const sampleOrderDetailsReports = {
+  "order-001": {
+    orderId: "order-001",
+    orderReferenceLabel: "DL-2024-001234",
+    statusLabel: "Host status: preparing order items",
+    statusSupporting:
+      "This first-party order update is supplied by the demo host.",
+    statusTone: "attention",
+    placedAtLabel: "June 4, 2026",
+    items: [
+      {
+        lineItemId: "order-line-item-001",
+        productName: "Gentle Foaming Cleanser",
+        quantityLabel: "Host quantity: 1",
+        variantLabel: "200 ml",
+        unitPriceLabel: "$18.00",
+        lineTotalLabel: "$18.00",
+      },
+      {
+        lineItemId: "order-line-item-002",
+        productName: "Invisible Shield SPF 50",
+        quantityLabel: "Host quantity: 1",
+        variantLabel: "50 ml",
+        unitPriceLabel: "$32.00",
+        lineTotalLabel: "$32.00",
+      },
+      {
+        lineItemId: "order-line-item-003",
+        productName: "Hyaluronic Boost Serum",
+        quantityLabel: "Host quantity: 1",
+        variantLabel: "30 ml",
+        unitPriceLabel: "$35.00",
+        lineTotalLabel: "$35.00",
+      },
+    ],
+    deliveryAddress: {
+      recipientName: "Demo recipient",
+      addressLines: [
+        "Host-supplied delivery address summary",
+      ],
+      contactLabel: "Host delivery-contact label",
+    },
+    shippingUpdates: [
+      {
+        updateId: "order-update-001",
+        statusLabel: "Order received by DermaLens",
+        timestampLabel: "Host timestamp: received",
+        supporting:
+          "This shipping update is supplied by the demo host.",
+        tone: "neutral",
+      },
+      {
+        updateId: "order-update-002",
+        statusLabel: "Preparing order items",
+        timestampLabel: "Host timestamp: preparation",
+        supporting:
+          "This preparation update is supplied by the demo host.",
+        tone: "attention",
+      },
+    ],
+    receipt:
+      sampleOrderDetailsReceiptsByShippingOptionId["shipopt-001"],
+    helperLabel:
+      "Static demo order details only. No logistics adapter is connected.",
+    privacyLabel:
+      "This demo keeps order context in memory only. Persistence remains host-owned.",
+  },
+} satisfies Record<string, OrderDetailsReport>
+
+type DemoOrderDetailsId =
+  keyof typeof sampleOrderDetailsReports
+
+function isDemoOrderDetailsId(
+  orderId: string,
+): orderId is DemoOrderDetailsId {
+  return Object.prototype.hasOwnProperty.call(
+    sampleOrderDetailsReports,
+    orderId,
+  )
+}
+
+function isDemoCheckoutShippingOptionId(
+  value: string,
+): value is DemoCheckoutShippingOptionId {
+  return (
+    value === "shipopt-001" ||
+    value === "shipopt-002"
+  )
+}
 
 const sampleProgressMetrics: ProgressComparisonMetric[] = [
   {
@@ -209,6 +336,8 @@ export default function Page() {
     useState<DemoIngredientInputDraft | null>(null)
   const [ingredientScannerResultContext, setIngredientScannerResultContext] =
     useState<DemoIngredientScannerResultContext | null>(null)
+  const [orderDetailsContext, setOrderDetailsContext] =
+    useState<DemoOrderDetailsContext | null>(null)
   const [progressBaselineScanId, setProgressBaselineScanId] =
     useState<DemoProgressScanId>(sampleProgressScanIds.first)
   const [progressComparisonScanId, setProgressComparisonScanId] =
@@ -231,6 +360,25 @@ export default function Page() {
       sourceScreen,
     })
     setCurrentScreen("product-detail")
+  }
+
+  function openOrderDetails(
+    orderId: string,
+    backScreen: OrderDetailsBackScreen,
+  ) {
+    if (!isDemoOrderDetailsId(orderId)) {
+      console.log(
+        "Order details route failed closed:",
+        orderId,
+      )
+      return
+    }
+
+    setOrderDetailsContext({
+      orderId,
+      backScreen,
+    })
+    setCurrentScreen("order-details")
   }
 
   function openIngredientInputReview(
@@ -992,7 +1140,7 @@ export default function Page() {
     recentOrder: {
       orderId: "order-001",
       orderReferenceLabel: "DL-2024-001234",
-      statusLabel: "Order details route not connected yet",
+      statusLabel: "Host status: preparing order items",
       supporting: "Your first-party DermaLens order summary remains readable.",
     },
     environment: {
@@ -1984,6 +2132,63 @@ export default function Page() {
     estimatedDeliveryLabel: selectedCheckoutShippingFixture.estimatedDeliveryLabel,
   }
 
+  const sampleSelectedOrderDetailsReceipt =
+    isDemoCheckoutShippingOptionId(
+      selectedCheckoutShippingOptionId,
+    )
+      ? sampleOrderDetailsReceiptsByShippingOptionId[
+          selectedCheckoutShippingOptionId
+        ]
+      : null
+
+  const sampleOrderHistoryReport: OrderHistoryReport | null =
+    sampleSelectedOrderDetailsReceipt
+      ? {
+          orders: [
+            {
+              orderId: "order-001",
+              orderReferenceLabel: "DL-2024-001234",
+              statusLabel: "Host status: preparing order items",
+              placedAtLabel: "June 4, 2026",
+              itemSummaryLabel: "3 host-supplied items",
+              totalLabel:
+                sampleSelectedOrderDetailsReceipt.totalLabel,
+              supporting:
+                "This first-party order summary is supplied by the demo host.",
+              statusTone: "attention",
+              canOpenOrder: true,
+            },
+            {
+              orderId: "order-002",
+              orderReferenceLabel: "DL-2024-001233",
+              statusLabel: "Host status: historical order summary",
+              placedAtLabel: "May 20, 2026",
+              itemSummaryLabel: "1 host-supplied item",
+              totalLabel: "$18.00",
+              supporting:
+                "Detailed routing for this historical demo order is not connected yet.",
+              statusTone: "neutral",
+              canOpenOrder: false,
+            },
+          ],
+          helperLabel:
+            "Static first-party order-history fixtures only. Real pagination and retrieval remain host-owned.",
+          privacyLabel:
+            "This demo keeps order-list context in memory only. Persistence remains host-owned.",
+          loadMoreLabel: "Load more orders",
+          hasMoreOrders: true,
+        }
+      : null
+
+  const sampleActiveOrderDetailsReport: OrderDetailsReport | null =
+    orderDetailsContext &&
+    sampleSelectedOrderDetailsReceipt
+      ? {
+          ...sampleOrderDetailsReports[orderDetailsContext.orderId],
+          receipt: sampleSelectedOrderDetailsReceipt,
+        }
+      : null
+
   // Simulate analysis progress
   useEffect(() => {
     if (currentScreen !== "analysis") {
@@ -2026,6 +2231,72 @@ export default function Page() {
     }
   }, [analysisProgress, currentScreen])
 
+  // Order Details Screen
+  if (currentScreen === "order-details") {
+    return (
+      <OrderDetailsScreen
+        state={sampleActiveOrderDetailsReport ? "ready" : "error"}
+        report={sampleActiveOrderDetailsReport}
+        isOffline={false}
+        canGoBack={true}
+        canOpenSupport={true}
+        canDownloadReceipt={true}
+        isReceiptDownloadAvailableOffline={false}
+        onBack={() => {
+          if (orderDetailsContext === null) {
+            console.log(
+              "Order-details Back failed closed because source context is unavailable.",
+            )
+            return
+          }
+
+          setCurrentScreen(orderDetailsContext.backScreen)
+        }}
+        onOpenSupport={(orderId) => {
+          if (
+            orderDetailsContext === null ||
+            orderId !== orderDetailsContext.orderId ||
+            !isDemoOrderDetailsId(orderId)
+          ) {
+            console.log(
+              "Order support route failed closed:",
+              orderId,
+            )
+            return
+          }
+
+          console.log(
+            "Opening order support through future adapter:",
+            orderId,
+          )
+        }}
+        onDownloadReceipt={(orderId) => {
+          if (
+            orderDetailsContext === null ||
+            orderId !== orderDetailsContext.orderId ||
+            !isDemoOrderDetailsId(orderId)
+          ) {
+            console.log(
+              "Receipt-download route failed closed:",
+              orderId,
+            )
+            return
+          }
+
+          console.log(
+            "Requesting receipt download through future adapter:",
+            orderId,
+          )
+        }}
+        onRetryLoad={() => {
+          console.log(
+            "Retrying order-details load through future adapter.",
+          )
+        }}
+      />
+    )
+  }
+
   // Order Confirmation Screen
   if (currentScreen === "order-confirmation") {
     return (
@@ -2037,7 +2308,7 @@ export default function Page() {
         canRefreshStatus={false}
         canRetryPayment={false}
         onViewOrder={(orderId) => {
-          console.log("Viewing order:", orderId)
+          openOrderDetails(orderId, "order-confirmation")
         }}
         onContinueShopping={() => {
           setStoreBackScreen("routine")
@@ -2494,6 +2765,37 @@ export default function Page() {
     )
   }
 
+  // Order History Screen
+  if (currentScreen === "order-history") {
+    return (
+      <OrderHistoryScreen
+        state={sampleOrderHistoryReport ? "ready" : "error"}
+        report={sampleOrderHistoryReport}
+        isOffline={false}
+        canGoBack={true}
+        canOpenOrders={true}
+        canLoadMore={true}
+        isLoadMoreAvailableOffline={false}
+        onBack={() => {
+          setCurrentScreen("dashboard")
+        }}
+        onOpenOrder={(orderId) => {
+          openOrderDetails(orderId, "order-history")
+        }}
+        onLoadMore={() => {
+          console.log(
+            "Loading more order-history entries through future adapter.",
+          )
+        }}
+        onRetryLoad={() => {
+          console.log(
+            "Retrying order-history load through future adapter.",
+          )
+        }}
+      />
+    )
+  }
+
   // Home Dashboard Screen
   if (currentScreen === "dashboard") {
     return (
@@ -2509,9 +2811,9 @@ export default function Page() {
         canOpenGuestScanner={true}
         isGuestScannerAvailableOffline={false}
         canOpenProgress={true}
-        canOpenOrders={false}
+        canOpenOrders={true}
         canOpenStore={true}
-        canOpenRecentOrder={false}
+        canOpenRecentOrder={true}
         onStartAnalysis={(profileId) => {
           console.log("Starting dashboard scan for profile:", profileId)
           setImageSourceBackScreen("dashboard")
@@ -2541,14 +2843,14 @@ export default function Page() {
           setCurrentScreen("progress-tracking")
         }}
         onOpenOrders={() => {
-          console.log("Opening dashboard orders...")
+          setCurrentScreen("order-history")
         }}
         onOpenStore={() => {
           setStoreBackScreen("dashboard")
           setCurrentScreen("store")
         }}
         onOpenRecentOrder={(orderId) => {
-          console.log("Opening dashboard recent order:", orderId)
+          openOrderDetails(orderId, "dashboard")
         }}
         onRetryLoad={() => {
           console.log("Retrying dashboard load...")
