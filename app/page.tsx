@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { type ReactNode, useState, useEffect } from "react"
 import WelcomeScreen from "@/components/welcome-screen"
 import PrivacyAndFacialDataConsentScreen from "@/components/privacy-consent-screen"
 import ProfileSetupScreen from "@/components/profile-setup-screen"
@@ -24,6 +24,13 @@ import OrderDetailsScreen, {
 import OrderHistoryScreen, {
   type OrderHistoryReport,
 } from "@/components/order-history-screen"
+import AccountAndOptionalSyncScreen, {
+  type AccountAndOptionalSyncReport,
+} from "@/components/account-and-optional-sync-screen"
+import MoreHubScreen from "@/components/more-hub-screen"
+import ReturningUserNavigationShell, {
+  type ScanSheetSourceDestination,
+} from "@/components/returning-user-navigation-shell"
 import HomeDashboardScreen, { type HomeDashboardReport } from "@/components/home-dashboard-screen"
 import ProgressTrackingScreen, {
   type ProgressComparisonMetric,
@@ -43,7 +50,7 @@ import IngredientScannerResultsScreen, {
   type IngredientScannerResultsReport,
 } from "@/components/ingredient-scanner-results-screen"
 
-type Screen = "welcome" | "privacy-consent" | "profile-setup" | "image-source" | "camera" | "image-review" | "analysis" | "results-summary" | "full-report" | "routine" | "store" | "cart" | "product-detail" | "checkout-details" | "checkout-review" | "payment-gateway" | "order-confirmation" | "order-details" | "order-history" | "dashboard" | "progress-tracking" | "profile-management" | "ingredient-scanner-entry" | "ingredient-input-review" | "ingredient-scanner-results"
+type Screen = "welcome" | "privacy-consent" | "profile-setup" | "image-source" | "camera" | "image-review" | "analysis" | "results-summary" | "full-report" | "routine" | "store" | "cart" | "product-detail" | "checkout-details" | "checkout-review" | "payment-gateway" | "order-confirmation" | "order-details" | "order-history" | "dashboard" | "progress-tracking" | "more-hub" | "profile-management" | "account-sync" | "ingredient-scanner-entry" | "ingredient-input-review" | "ingredient-scanner-results"
 type ProductDetailSourceScreen = "routine" | "store" | "cart"
 type ManagedProfileId = "profile-001" | "profile-002"
 type DemoCheckoutShippingOptionId =
@@ -53,13 +60,14 @@ type DemoProgressScanId =
   | "progress-scan-001"
   | "progress-scan-002"
   | "progress-scan-003"
-type IngredientScannerEntryBackScreen = "welcome" | "dashboard"
-type ProfileManagementBackScreen = "dashboard" | "image-source" | "image-review" | "ingredient-scanner-entry" | "ingredient-input-review"
+type IngredientScannerEntryBackScreen = "welcome" | "dashboard" | "routine" | "progress-tracking" | "more-hub"
+type ProfileManagementBackScreen = "dashboard" | "image-source" | "image-review" | "ingredient-scanner-entry" | "ingredient-input-review" | "more-hub"
 type ProfileSetupBackScreen = "privacy-consent" | "dashboard" | "profile-management"
-type ImageSourceBackScreen = "profile-setup" | "dashboard" | "profile-management" | "progress-tracking"
-type RoutineBackScreen = "full-report" | "results-summary" | "dashboard" | "progress-tracking"
+type ImageSourceBackScreen = "profile-setup" | "dashboard" | "profile-management" | "progress-tracking" | "routine" | "more-hub"
+type RoutineBackScreen = "root" | "full-report" | "results-summary" | "progress-tracking"
 type ResultsSummaryCloseScreen = "dashboard" | "progress-tracking"
-type StoreBackScreen = "routine" | "dashboard"
+type StoreBackScreen = "routine" | "dashboard" | "more-hub"
+type OrderHistoryBackScreen = "dashboard" | "more-hub"
 type OrderDetailsBackScreen = "dashboard" | "order-confirmation" | "order-history"
 
 interface DemoIngredientInputDraft {
@@ -346,6 +354,8 @@ export default function Page() {
     useState<RoutineBackScreen>("full-report")
   const [storeBackScreen, setStoreBackScreen] =
     useState<StoreBackScreen>("routine")
+  const [orderHistoryBackScreen, setOrderHistoryBackScreen] =
+    useState<OrderHistoryBackScreen>("dashboard")
   const [productDetailContext, setProductDetailContext] = useState<{
     productId: string
     sourceScreen: ProductDetailSourceScreen
@@ -451,6 +461,112 @@ export default function Page() {
       ingredientInputDraft?.selectedProfileId ?? null,
     )
     setCurrentScreen("ingredient-scanner-entry")
+  }
+
+  function openRootHome() {
+    setCurrentScreen("dashboard")
+  }
+
+  function openRootRoutine() {
+    setRoutineBackScreen("root")
+    setCurrentScreen("routine")
+  }
+
+  function openRootProgress() {
+    setCurrentScreen("progress-tracking")
+  }
+
+  function openRootMore() {
+    setCurrentScreen("more-hub")
+  }
+
+  function getRootImageSourceBackScreen(
+    source: ScanSheetSourceDestination,
+  ): ImageSourceBackScreen {
+    if (source === "routine") {
+      return "routine"
+    }
+
+    if (source === "progress") {
+      return "progress-tracking"
+    }
+
+    if (source === "more") {
+      return "more-hub"
+    }
+
+    return "dashboard"
+  }
+
+  function getRootScannerBackScreen(
+    source: ScanSheetSourceDestination,
+  ): IngredientScannerEntryBackScreen {
+    if (source === "routine") {
+      return "routine"
+    }
+
+    if (source === "progress") {
+      return "progress-tracking"
+    }
+
+    if (source === "more") {
+      return "more-hub"
+    }
+
+    return "dashboard"
+  }
+
+  function preserveRootRoutineSource(
+    source: ScanSheetSourceDestination,
+  ) {
+    if (source === "routine") {
+      setRoutineBackScreen("root")
+    }
+  }
+
+  function openFacialScanFromRoot(
+    source: ScanSheetSourceDestination,
+  ) {
+    preserveRootRoutineSource(source)
+    setImageSourceBackScreen(
+      getRootImageSourceBackScreen(source),
+    )
+    setCapturedImageUrl(null)
+    setCurrentScreen("image-source")
+  }
+
+  function openIngredientScannerFromRoot(
+    source: ScanSheetSourceDestination,
+  ) {
+    preserveRootRoutineSource(source)
+    setIngredientScannerEntryBackScreen(
+      getRootScannerBackScreen(source),
+    )
+    setIngredientScannerSelectedProfileId(
+      activeManagedProfileId,
+    )
+    setCurrentScreen("ingredient-scanner-entry")
+  }
+
+  function renderReturningUserRoot(
+    activeDestination: ScanSheetSourceDestination,
+    content: ReactNode,
+  ) {
+    return (
+      <ReturningUserNavigationShell
+        activeDestination={activeDestination}
+        onOpenHome={openRootHome}
+        onOpenIngredientScanner={
+          openIngredientScannerFromRoot
+        }
+        onOpenMore={openRootMore}
+        onOpenProgress={openRootProgress}
+        onOpenRoutine={openRootRoutine}
+        onStartFacialScan={openFacialScanFromRoot}
+      >
+        {content}
+      </ReturningUserNavigationShell>
+    )
   }
   
   // Analysis state
@@ -911,11 +1027,66 @@ export default function Page() {
     },
   ]
 
+  function resolveKnownManagedProfileId(
+    profileId: string,
+  ): ManagedProfileId | null {
+    const matchingProfiles = sampleManagedProfiles.filter(
+      (profile) => profile.profileId === profileId,
+    )
+
+    return matchingProfiles.length === 1
+      ? matchingProfiles[0].profileId
+      : null
+  }
+
   const sampleProfileManagementReport: ProfileSwitcherAndManagementReport = {
     profiles: sampleManagedProfiles,
     helperLabel: "Profiles stay local on this device unless you choose to sync them.",
     profileLimitLabel: "Demo host limit: 2 of 5 profiles used.",
-    syncHelperLabel: "Optional sync settings route is not connected in this demo.",
+    syncHelperLabel: "Optional account and sync settings are available from this route.",
+  }
+
+  const sampleAccountAndOptionalSyncReport: AccountAndOptionalSyncReport = {
+    accountStatus: "signed-out",
+    accountStatusLabel: "Host status: signed out",
+    accountSupporting:
+      "Sign-in remains optional. Local profiles stay usable without an account.",
+    accountDisplayLabel:
+      "Optional account connection is not active in this demo.",
+    profiles: [
+      {
+        profileId: "profile-001",
+        displayName: managedProfileDisplayNames["profile-001"],
+        storageStateLabel: "Host label: saved locally on this device",
+        storageSupporting: "Primary local skincare profile.",
+        syncAction: "enable",
+        syncActionLabel: "Enable sync",
+        syncBlockedLabel: "Sign in to manage sync",
+        canActivateSyncAction: false,
+        consentStateLabel: "Host consent label: active",
+        facialDataStateLabel: "Host facial-data label: saved locally",
+        canRevokeConsent: true,
+        canRequestFacialDataDeletion: true,
+      },
+      {
+        profileId: "profile-002",
+        displayName: managedProfileDisplayNames["profile-002"],
+        storageStateLabel: "Host label: saved locally on this device",
+        storageSupporting: "Second local skincare profile.",
+        syncAction: "enable",
+        syncActionLabel: "Enable sync",
+        syncBlockedLabel: "Sign in to manage sync",
+        canActivateSyncAction: false,
+        consentStateLabel: "Host consent label: active",
+        facialDataStateLabel: "Host facial-data label: saved locally",
+        canRevokeConsent: true,
+        canRequestFacialDataDeletion: true,
+      },
+    ],
+    helperLabel:
+      "Static demo account and sync settings only. Authentication and sync processing remain host-owned.",
+    privacyLabel:
+      "Consent revocation and saved facial-data deletion remain explicit host-owned requests.",
   }
 
   const scannerProfileMatches = ingredientScannerSelectedProfileId
@@ -2620,6 +2791,103 @@ export default function Page() {
     )
   }
 
+  // Account and Optional Sync Screen
+  if (currentScreen === "account-sync") {
+    return (
+      <AccountAndOptionalSyncScreen
+        state="ready"
+        report={sampleAccountAndOptionalSyncReport}
+        isOffline={false}
+        canGoBack={true}
+        canRequestSignIn={true}
+        canRequestSignOut={false}
+        canManageProfileSync={false}
+        canRequestConsentRevocation={true}
+        canRequestFacialDataDeletion={true}
+        isSignInAvailableOffline={false}
+        isSignOutAvailableOffline={false}
+        isSyncAvailableOffline={false}
+        isPrivacyRequestAvailableOffline={false}
+        onBack={() => {
+          setCurrentScreen("profile-management")
+        }}
+        onRequestSignIn={() => {
+          console.log(
+            "Opening optional account sign-in through future adapter.",
+          )
+        }}
+        onRequestSignOut={() => {
+          console.log(
+            "Requesting optional account sign-out through future adapter.",
+          )
+        }}
+        onEnableProfileSync={(profileId) => {
+          const resolvedProfileId = resolveKnownManagedProfileId(profileId)
+
+          if (resolvedProfileId === null) {
+            console.log("Enable-sync request failed closed:", profileId)
+            return
+          }
+
+          console.log(
+            "Requesting profile sync enable through future adapter:",
+            resolvedProfileId,
+          )
+        }}
+        onDisableProfileSync={(profileId) => {
+          const resolvedProfileId = resolveKnownManagedProfileId(profileId)
+
+          if (resolvedProfileId === null) {
+            console.log("Disable-sync request failed closed:", profileId)
+            return
+          }
+
+          console.log(
+            "Requesting profile sync removal through future adapter:",
+            resolvedProfileId,
+          )
+        }}
+        onRevokeConsent={(profileId) => {
+          const resolvedProfileId = resolveKnownManagedProfileId(profileId)
+
+          if (resolvedProfileId === null) {
+            console.log(
+              "Consent-revocation request failed closed:",
+              profileId,
+            )
+            return
+          }
+
+          console.log(
+            "Requesting consent revocation through future adapter:",
+            resolvedProfileId,
+          )
+        }}
+        onRequestFacialDataDeletion={(profileId) => {
+          const resolvedProfileId = resolveKnownManagedProfileId(profileId)
+
+          if (resolvedProfileId === null) {
+            console.log(
+              "Facial-data deletion request failed closed:",
+              profileId,
+            )
+            return
+          }
+
+          console.log(
+            "Requesting saved facial-data deletion through future adapter:",
+            resolvedProfileId,
+          )
+        }}
+        onRetryLoad={() => {
+          console.log(
+            "Retrying account and optional-sync load through future adapter.",
+          )
+        }}
+      />
+    )
+  }
+
   // Profile Switcher and Management Screen
   if (currentScreen === "profile-management") {
     return (
@@ -2673,7 +2941,7 @@ export default function Page() {
           console.log("Editing profile:", profileId)
         }}
         onOpenSyncSettings={() => {
-          console.log("Opening profile sync settings...")
+          setCurrentScreen("account-sync")
         }}
         onDeleteProfile={(profileId) => {
           console.log("Deleting profile:", profileId)
@@ -2687,7 +2955,8 @@ export default function Page() {
 
   // Progress Tracking Screen
   if (currentScreen === "progress-tracking") {
-    return (
+    return renderReturningUserRoot(
+      "progress",
       <ProgressTrackingScreen
         state="ready"
         report={sampleProgressTrackingReport}
@@ -2761,7 +3030,46 @@ export default function Page() {
         onRetryLoad={() => {
           console.log("Retrying progress tracking load through future adapter.")
         }}
-      />
+      />,
+    )
+  }
+
+  // More Hub Screen
+  if (currentScreen === "more-hub") {
+    return renderReturningUserRoot(
+      "more",
+      <MoreHubScreen
+        state="ready"
+        isOffline={false}
+        canOpenStore={true}
+        canOpenOrders={true}
+        canOpenIngredientScanner={true}
+        canOpenProfilesAndOptionalSync={true}
+        isStoreAvailableOffline={false}
+        isOrdersAvailableOffline={false}
+        isIngredientScannerAvailableOffline={false}
+        isProfilesAndOptionalSyncAvailableOffline={true}
+        onOpenStore={() => {
+          setStoreBackScreen("more-hub")
+          setCurrentScreen("store")
+        }}
+        onOpenOrders={() => {
+          setOrderHistoryBackScreen("more-hub")
+          setCurrentScreen("order-history")
+        }}
+        onOpenIngredientScanner={() => {
+          setIngredientScannerEntryBackScreen("more-hub")
+          setIngredientScannerSelectedProfileId(activeManagedProfileId)
+          setCurrentScreen("ingredient-scanner-entry")
+        }}
+        onOpenProfilesAndOptionalSync={() => {
+          setProfileManagementBackScreen("more-hub")
+          setCurrentScreen("profile-management")
+        }}
+        onRetryLoad={() => {
+          console.log("Retrying more options load through future adapter.")
+        }}
+      />,
     )
   }
 
@@ -2777,7 +3085,7 @@ export default function Page() {
         canLoadMore={true}
         isLoadMoreAvailableOffline={false}
         onBack={() => {
-          setCurrentScreen("dashboard")
+          setCurrentScreen(orderHistoryBackScreen)
         }}
         onOpenOrder={(orderId) => {
           openOrderDetails(orderId, "order-history")
@@ -2798,7 +3106,8 @@ export default function Page() {
 
   // Home Dashboard Screen
   if (currentScreen === "dashboard") {
-    return (
+    return renderReturningUserRoot(
+      "home",
       <HomeDashboardScreen
         state="ready"
         report={sampleDashboardReport}
@@ -2808,11 +3117,7 @@ export default function Page() {
         canChangeProfile={true}
         canOpenLatestReport={true}
         canOpenRoutine={true}
-        canOpenGuestScanner={true}
-        isGuestScannerAvailableOffline={false}
         canOpenProgress={true}
-        canOpenOrders={true}
-        canOpenStore={true}
         canOpenRecentOrder={true}
         onStartAnalysis={(profileId) => {
           console.log("Starting dashboard scan for profile:", profileId)
@@ -2831,23 +3136,20 @@ export default function Page() {
         }}
         onOpenRoutine={(routineId) => {
           console.log("Opening dashboard routine:", routineId)
-          setRoutineBackScreen("dashboard")
-          setCurrentScreen("routine")
+          openRootRoutine()
         }}
         onOpenGuestScanner={() => {
-          setIngredientScannerEntryBackScreen("dashboard")
-          setIngredientScannerSelectedProfileId(activeManagedProfileId)
-          setCurrentScreen("ingredient-scanner-entry")
+          console.log(
+            "Dashboard ingredient scanner shortcut moved to root navigation.",
+          )
         }}
         onOpenProgress={() => {
-          setCurrentScreen("progress-tracking")
-        }}
-        onOpenOrders={() => {
-          setCurrentScreen("order-history")
+          openRootProgress()
         }}
         onOpenStore={() => {
-          setStoreBackScreen("dashboard")
-          setCurrentScreen("store")
+          console.log(
+            "Dashboard Store shortcut moved to More.",
+          )
         }}
         onOpenRecentOrder={(orderId) => {
           openOrderDetails(orderId, "dashboard")
@@ -2855,7 +3157,7 @@ export default function Page() {
         onRetryLoad={() => {
           console.log("Retrying dashboard load...")
         }}
-      />
+      />,
     )
   }
 
@@ -2890,7 +3192,7 @@ export default function Page() {
 
   // Routine Recommendations Screen
   if (currentScreen === "routine") {
-    return (
+    const routineContent = (
       <RoutineRecommendationsScreen
         state="ready"
         report={sampleRoutineReport}
@@ -2898,7 +3200,11 @@ export default function Page() {
         isOffline={false}
         canOpenStore={true}
         onBack={() => {
-          setCurrentScreen(routineBackScreen)
+          setCurrentScreen(
+            routineBackScreen === "root"
+              ? "dashboard"
+              : routineBackScreen,
+          )
         }}
         onOpenStore={() => {
           setStoreBackScreen("routine")
@@ -2912,6 +3218,12 @@ export default function Page() {
         }}
       />
     )
+
+    if (routineBackScreen === "root") {
+      return renderReturningUserRoot("routine", routineContent)
+    }
+
+    return routineContent
   }
 
   // Full Report Detail Screen

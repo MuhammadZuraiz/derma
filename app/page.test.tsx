@@ -165,13 +165,82 @@ vi.mock("@/components/results-summary-screen", () => ({
   ),
 }))
 
+vi.mock("@/components/returning-user-navigation-shell", () => ({
+  default: ({
+    activeDestination,
+    children,
+    onOpenHome,
+    onOpenIngredientScanner,
+    onOpenMore,
+    onOpenProgress,
+    onOpenRoutine,
+    onStartFacialScan,
+  }: MockProps) => (
+    <section data-testid="returning-user-shell">
+      <div data-testid="shell-active-destination">
+        {activeDestination}
+      </div>
+      <button onClick={onOpenHome} type="button">
+        Shell Home
+      </button>
+      <button onClick={onOpenRoutine} type="button">
+        Shell Routine
+      </button>
+      <button
+        onClick={() => onStartFacialScan?.(activeDestination)}
+        type="button"
+      >
+        Shell Scan facial
+      </button>
+      <button
+        onClick={() => onOpenIngredientScanner?.(activeDestination)}
+        type="button"
+      >
+        Shell Scan ingredient
+      </button>
+      <button onClick={onOpenProgress} type="button">
+        Shell Progress
+      </button>
+      <button onClick={onOpenMore} type="button">
+        Shell More
+      </button>
+      <div data-testid="shell-content">{children}</div>
+    </section>
+  ),
+}))
+
+vi.mock("@/components/more-hub-screen", () => ({
+  default: ({
+    onOpenIngredientScanner,
+    onOpenOrders,
+    onOpenProfilesAndOptionalSync,
+    onOpenStore,
+    onRetryLoad,
+  }: MockProps) => (
+    <section data-testid="more-hub-screen">
+      <button onClick={onOpenStore} type="button">
+        More open Store
+      </button>
+      <button onClick={onOpenOrders} type="button">
+        More open Orders
+      </button>
+      <button onClick={onOpenIngredientScanner} type="button">
+        More open Ingredient scanner
+      </button>
+      <button onClick={onOpenProfilesAndOptionalSync} type="button">
+        More open Profiles and optional sync
+      </button>
+      <button onClick={onRetryLoad} type="button">
+        More retry
+      </button>
+    </section>
+  ),
+}))
+
 vi.mock("@/components/home-dashboard-screen", () => ({
   default: ({
-    canOpenGuestScanner,
-    canOpenOrders,
     canOpenProgress,
     canOpenRecentOrder,
-    isGuestScannerAvailableOffline,
     onChangeProfile,
     onOpenGuestScanner,
     onOpenLatestReport,
@@ -188,11 +257,14 @@ vi.mock("@/components/home-dashboard-screen", () => ({
       <div data-testid="dashboard-report">{JSON.stringify(report)}</div>
       <div data-testid="dashboard-props">
         {JSON.stringify({
-          canOpenGuestScanner,
-          canOpenOrders,
           canOpenProgress,
           canOpenRecentOrder,
-          isGuestScannerAvailableOffline,
+          hasLegacyGuestScannerCallback:
+            typeof onOpenGuestScanner === "function",
+          hasLegacyOrdersCallback:
+            typeof onOpenOrders === "function",
+          hasLegacyStoreCallback:
+            typeof onOpenStore === "function",
           showEnvironmentalModule,
         })}
       </div>
@@ -218,28 +290,11 @@ vi.mock("@/components/home-dashboard-screen", () => ({
         Dashboard open routine
       </button>
       <button
-        disabled={!canOpenGuestScanner}
-        onClick={onOpenGuestScanner}
-        type="button"
-      >
-        Open dashboard ingredient scanner
-      </button>
-      <button
         disabled={!canOpenProgress}
         onClick={onOpenProgress}
         type="button"
       >
         Dashboard open progress
-      </button>
-      <button
-        disabled={!canOpenOrders}
-        onClick={onOpenOrders}
-        type="button"
-      >
-        Dashboard open orders
-      </button>
-      <button onClick={onOpenStore} type="button">
-        Dashboard open store
       </button>
       <button
         disabled={!canOpenRecentOrder}
@@ -442,13 +497,167 @@ vi.mock("@/components/profile-switcher-and-management-screen", () => ({
           Profile management edit Maya
         </button>
         <button onClick={onOpenSyncSettings} type="button">
-          Profile management open sync
+          Profile management open sync settings
         </button>
         <button onClick={() => onDeleteProfile("profile-002")} type="button">
           Profile management delete Maya
         </button>
         <button onClick={onRetryLoad} type="button">
           Profile management retry
+        </button>
+      </section>
+    )
+  },
+}))
+
+vi.mock("@/components/account-and-optional-sync-screen", () => ({
+  default: ({
+    canGoBack,
+    canManageProfileSync,
+    canRequestConsentRevocation,
+    canRequestFacialDataDeletion,
+    canRequestSignIn,
+    canRequestSignOut,
+    isOffline,
+    isPrivacyRequestAvailableOffline,
+    isSignInAvailableOffline,
+    isSignOutAvailableOffline,
+    isSyncAvailableOffline,
+    onBack,
+    onDisableProfileSync,
+    onEnableProfileSync,
+    onRequestFacialDataDeletion,
+    onRequestSignIn,
+    onRequestSignOut,
+    onRetryLoad,
+    onRevokeConsent,
+    report,
+    state,
+  }: MockProps) => {
+    const profiles = report?.profiles ?? []
+
+    return (
+      <section data-testid="account-sync-screen">
+        <div data-testid="account-sync-report">{JSON.stringify(report)}</div>
+        <div data-testid="account-sync-account-status">
+          {report?.accountStatus ?? ""}
+        </div>
+        <div data-testid="account-sync-account-status-label">
+          {report?.accountStatusLabel ?? ""}
+        </div>
+        <div data-testid="account-sync-profile-ids">
+          {JSON.stringify(
+            profiles.map((profile: MockProps) => profile.profileId),
+          )}
+        </div>
+        <div data-testid="account-sync-display-names">
+          {JSON.stringify(
+            profiles.map((profile: MockProps) => profile.displayName),
+          )}
+        </div>
+        <div data-testid="account-sync-storage-labels">
+          {JSON.stringify(
+            profiles.map((profile: MockProps) => profile.storageStateLabel),
+          )}
+        </div>
+        <div data-testid="account-sync-sync-action-kinds">
+          {JSON.stringify(
+            profiles.map((profile: MockProps) => profile.syncAction),
+          )}
+        </div>
+        <div data-testid="account-sync-sync-action-availability">
+          {JSON.stringify(
+            profiles.map(
+              (profile: MockProps) =>
+                profile.canActivateSyncAction !== false,
+            ),
+          )}
+        </div>
+        <div data-testid="account-sync-consent-labels">
+          {JSON.stringify(
+            profiles.map((profile: MockProps) => profile.consentStateLabel),
+          )}
+        </div>
+        <div data-testid="account-sync-facial-data-labels">
+          {JSON.stringify(
+            profiles.map((profile: MockProps) => profile.facialDataStateLabel),
+          )}
+        </div>
+        <div data-testid="account-sync-props">
+          {JSON.stringify({
+            state,
+            isOffline,
+            canGoBack,
+            canRequestSignIn,
+            canRequestSignOut,
+            canManageProfileSync,
+            canRequestConsentRevocation,
+            canRequestFacialDataDeletion,
+            isSignInAvailableOffline,
+            isSignOutAvailableOffline,
+            isSyncAvailableOffline,
+            isPrivacyRequestAvailableOffline,
+          })}
+        </div>
+        <button onClick={onBack} type="button">
+          Account sync back
+        </button>
+        <button onClick={onRequestSignIn} type="button">
+          Account sync request sign in
+        </button>
+        <button onClick={onRequestSignOut} type="button">
+          Account sync request sign out
+        </button>
+        <button
+          onClick={() => onEnableProfileSync?.("profile-001")}
+          type="button"
+        >
+          Account sync enable profile-001
+        </button>
+        <button
+          onClick={() => onEnableProfileSync?.("unknown-profile")}
+          type="button"
+        >
+          Account sync enable unknown profile
+        </button>
+        <button
+          onClick={() => onDisableProfileSync?.("profile-002")}
+          type="button"
+        >
+          Account sync disable profile-002
+        </button>
+        <button
+          onClick={() => onDisableProfileSync?.("unknown-profile")}
+          type="button"
+        >
+          Account sync disable unknown profile
+        </button>
+        <button
+          onClick={() => onRevokeConsent?.("profile-001")}
+          type="button"
+        >
+          Account sync revoke consent profile-001
+        </button>
+        <button
+          onClick={() => onRevokeConsent?.("unknown-profile")}
+          type="button"
+        >
+          Account sync revoke consent unknown profile
+        </button>
+        <button
+          onClick={() => onRequestFacialDataDeletion?.("profile-001")}
+          type="button"
+        >
+          Account sync delete facial data profile-001
+        </button>
+        <button
+          onClick={() => onRequestFacialDataDeletion?.("unknown-profile")}
+          type="button"
+        >
+          Account sync delete facial data unknown profile
+        </button>
+        <button onClick={onRetryLoad} type="button">
+          Account sync retry
         </button>
       </section>
     )
@@ -1135,6 +1344,19 @@ function getJson(testId: string) {
   return JSON.parse(screen.getByTestId(testId).textContent ?? "null")
 }
 
+function getShellActiveDestination() {
+  return (
+    screen.getByTestId("shell-active-destination")
+      .textContent ?? ""
+  )
+}
+
+function expectNoShell() {
+  expect(
+    screen.queryByTestId("returning-user-shell"),
+  ).not.toBeInTheDocument()
+}
+
 function getProfileManagementSummary() {
   return getJson("profile-management-report-summary")
 }
@@ -1227,10 +1449,42 @@ function getOrderHistoryReport() {
   }
 }
 
+function getAccountSyncReport() {
+  return {
+    accountStatus:
+      screen.getByTestId("account-sync-account-status").textContent ?? "",
+    accountStatusLabel:
+      screen.getByTestId("account-sync-account-status-label").textContent ??
+      "",
+    consentLabels: getJson("account-sync-consent-labels"),
+    displayNames: getJson("account-sync-display-names"),
+    facialDataLabels: getJson("account-sync-facial-data-labels"),
+    profileIds: getJson("account-sync-profile-ids"),
+    props: getJson("account-sync-props"),
+    report: getJson("account-sync-report"),
+    storageLabels: getJson("account-sync-storage-labels"),
+    syncActionAvailability: getJson(
+      "account-sync-sync-action-availability",
+    ),
+    syncActionKinds: getJson("account-sync-sync-action-kinds"),
+  }
+}
+
 function getBodyTextOutsideProfileManagementReport() {
   const renderedOutsideReport = document.body.cloneNode(true) as HTMLElement
   renderedOutsideReport
     .querySelector('[data-testid="profile-management-report-summary"]')
+    ?.remove()
+  return renderedOutsideReport.textContent ?? ""
+}
+
+function getBodyTextOutsideAccountSyncReports() {
+  const renderedOutsideReport = document.body.cloneNode(true) as HTMLElement
+  renderedOutsideReport
+    .querySelector('[data-testid="account-sync-report"]')
+    ?.remove()
+  renderedOutsideReport
+    .querySelector('[data-testid="account-sync-profile-ids"]')
     ?.remove()
   return renderedOutsideReport.textContent ?? ""
 }
@@ -1255,7 +1509,7 @@ async function goToWelcomeManualResults(user: User) {
 
 async function goToDashboardScannerEntry(user: User) {
   await goToDashboard(user)
-  await user.click(screen.getByRole("button", { name: "Open dashboard ingredient scanner" }))
+  await user.click(screen.getByRole("button", { name: "Shell Scan ingredient" }))
   expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
 }
 
@@ -1277,6 +1531,61 @@ async function goToProgress(user: User) {
   expect(screen.getByTestId("progress-tracking-screen")).toBeInTheDocument()
 }
 
+async function goToMore(user: User) {
+  await goToDashboard(user)
+  await user.click(screen.getByRole("button", { name: "Shell More" }))
+  expect(screen.getByTestId("more-hub-screen")).toBeInTheDocument()
+}
+
+async function goToMoreOrderHistory(user: User) {
+  await goToMore(user)
+  await user.click(screen.getByRole("button", { name: "More open Orders" }))
+  expect(screen.getByTestId("order-history-screen")).toBeInTheDocument()
+}
+
+async function goToRootDestination(
+  user: User,
+  destination: "home" | "routine" | "progress" | "more",
+) {
+  await goToDashboard(user)
+
+  if (destination === "routine") {
+    await user.click(screen.getByRole("button", { name: "Shell Routine" }))
+  }
+
+  if (destination === "progress") {
+    await user.click(screen.getByRole("button", { name: "Shell Progress" }))
+  }
+
+  if (destination === "more") {
+    await user.click(screen.getByRole("button", { name: "Shell More" }))
+  }
+
+  expect(getShellActiveDestination()).toBe(destination)
+}
+
+function expectRootDestination(
+  destination: "home" | "routine" | "progress" | "more",
+) {
+  if (destination === "home") {
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+  }
+
+  if (destination === "routine") {
+    expect(screen.getByTestId("routine-screen")).toBeInTheDocument()
+  }
+
+  if (destination === "progress") {
+    expect(screen.getByTestId("progress-tracking-screen")).toBeInTheDocument()
+  }
+
+  if (destination === "more") {
+    expect(screen.getByTestId("more-hub-screen")).toBeInTheDocument()
+  }
+
+  expect(getShellActiveDestination()).toBe(destination)
+}
+
 async function goToDashboardOrderDetails(user: User) {
   await goToDashboard(user)
   await user.click(screen.getByRole("button", { name: "Dashboard open recent order" }))
@@ -1284,9 +1593,17 @@ async function goToDashboardOrderDetails(user: User) {
 }
 
 async function goToDashboardOrderHistory(user: User) {
-  await goToDashboard(user)
-  await user.click(screen.getByRole("button", { name: "Dashboard open orders" }))
+  await goToMoreOrderHistory(user)
   expect(screen.getByTestId("order-history-screen")).toBeInTheDocument()
+}
+
+async function goToDashboardAccountSync(user: User) {
+  await goToDashboard(user)
+  await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+  await user.click(
+    screen.getByRole("button", { name: "Profile management open sync settings" }),
+  )
+  expect(screen.getByTestId("account-sync-screen")).toBeInTheDocument()
 }
 
 function goToOrderConfirmation() {
@@ -1302,6 +1619,157 @@ describe("Page route controller", () => {
     await goToDashboard(user)
 
     expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+    expect(getShellActiveDestination()).toBe("home")
+  })
+
+  it("renders the returning-user shell only on the initial UX-R5C root surfaces", async () => {
+    const user = renderPage()
+
+    await goToDashboard(user)
+    expect(getShellActiveDestination()).toBe("home")
+
+    await user.click(screen.getByRole("button", { name: "Shell Routine" }))
+    expect(screen.getByTestId("routine-screen")).toBeInTheDocument()
+    expect(getShellActiveDestination()).toBe("routine")
+
+    await user.click(screen.getByRole("button", { name: "Shell Progress" }))
+    expect(screen.getByTestId("progress-tracking-screen")).toBeInTheDocument()
+    expect(getShellActiveDestination()).toBe("progress")
+
+    await user.click(screen.getByRole("button", { name: "Shell More" }))
+    expect(screen.getByTestId("more-hub-screen")).toBeInTheDocument()
+    expect(getShellActiveDestination()).toBe("more")
+
+    await user.click(screen.getByRole("button", { name: "More open Store" }))
+    expect(screen.getByTestId("store-screen")).toBeInTheDocument()
+    expectNoShell()
+  })
+
+  it("uses root navigation callbacks without mutating destination inside the shell", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Shell Routine" }))
+    expectRootDestination("routine")
+
+    await user.click(screen.getByRole("button", { name: "Shell Home" }))
+    expectRootDestination("home")
+
+    await user.click(screen.getByRole("button", { name: "Shell Progress" }))
+    expectRootDestination("progress")
+
+    await user.click(screen.getByRole("button", { name: "Shell Home" }))
+    expectRootDestination("home")
+
+    await user.click(screen.getByRole("button", { name: "Shell More" }))
+    expectRootDestination("more")
+
+    await user.click(screen.getByRole("button", { name: "Shell Home" }))
+    expectRootDestination("home")
+  })
+
+  it("keeps root Routine distinct from deep Routine entries", async () => {
+    const user = renderPage()
+    await goToDashboard(user)
+
+    await user.click(screen.getByRole("button", { name: "Dashboard open routine" }))
+    expectRootDestination("routine")
+
+    await user.click(screen.getByRole("button", { name: "Routine back" }))
+    expectRootDestination("home")
+
+    await user.click(screen.getByRole("button", { name: "Dashboard open latest report" }))
+    await user.click(screen.getByRole("button", { name: "Open routine from results" }))
+    expect(screen.getByTestId("routine-screen")).toBeInTheDocument()
+    expectNoShell()
+
+    await user.click(screen.getByRole("button", { name: "Routine back" }))
+    expect(screen.getByTestId("results-screen")).toBeInTheDocument()
+  })
+
+  it.each([
+    ["home", "dashboard-screen"],
+    ["routine", "routine-screen"],
+    ["progress", "progress-tracking-screen"],
+    ["more", "more-hub-screen"],
+  ] as const)(
+    "maps shell facial scan from %s back to the originating root",
+    async (destination, expectedTestId) => {
+      const user = renderPage()
+      await goToRootDestination(user, destination)
+
+      await user.click(screen.getByRole("button", { name: "Shell Scan facial" }))
+
+      expect(screen.getByTestId("image-source-screen")).toBeInTheDocument()
+      expectNoShell()
+
+      await user.click(screen.getByRole("button", { name: "Image source back" }))
+
+      expect(screen.getByTestId(expectedTestId)).toBeInTheDocument()
+      expect(getShellActiveDestination()).toBe(destination)
+    },
+  )
+
+  it.each([
+    ["home", "dashboard-screen"],
+    ["routine", "routine-screen"],
+    ["progress", "progress-tracking-screen"],
+    ["more", "more-hub-screen"],
+  ] as const)(
+    "maps shell ingredient scanner from %s back to the originating root with profile context",
+    async (destination, expectedTestId) => {
+      const user = renderPage()
+      await goToRootDestination(user, destination)
+
+      await user.click(screen.getByRole("button", { name: "Shell Scan ingredient" }))
+
+      expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+      expectNoShell()
+      expect(getScannerEntryReport()).toMatchObject({
+        displayName: "Route Tester",
+        mode: "profiled",
+        profileId: "profile-001",
+      })
+
+      await user.click(screen.getByRole("button", { name: "Scanner entry back" }))
+
+      expect(screen.getByTestId(expectedTestId)).toBeInTheDocument()
+      expect(getShellActiveDestination()).toBe(destination)
+    },
+  )
+
+  it("routes More hub destinations with explicit Back to More and nested Account sync through profiles", async () => {
+    const user = renderPage()
+    await goToMore(user)
+
+    await user.click(screen.getByRole("button", { name: "More open Store" }))
+    expect(screen.getByTestId("store-screen")).toBeInTheDocument()
+    expectNoShell()
+    await user.click(screen.getByRole("button", { name: "Store back" }))
+    expectRootDestination("more")
+
+    await user.click(screen.getByRole("button", { name: "More open Orders" }))
+    expect(screen.getByTestId("order-history-screen")).toBeInTheDocument()
+    expectNoShell()
+    await user.click(screen.getByRole("button", { name: "Order history back" }))
+    expectRootDestination("more")
+
+    await user.click(screen.getByRole("button", { name: "More open Ingredient scanner" }))
+    expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+    expectNoShell()
+    await user.click(screen.getByRole("button", { name: "Scanner entry back" }))
+    expectRootDestination("more")
+
+    await user.click(screen.getByRole("button", { name: "More open Profiles and optional sync" }))
+    expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
+    expectNoShell()
+    await user.click(screen.getByRole("button", { name: "Profile management open sync settings" }))
+    expect(screen.getByTestId("account-sync-screen")).toBeInTheDocument()
+    expectNoShell()
+    await user.click(screen.getByRole("button", { name: "Account sync back" }))
+    expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Profile management back" }))
+    expectRootDestination("more")
   })
 
   it("keeps first-time profile setup routing directly to image source", async () => {
@@ -1350,13 +1818,14 @@ describe("Page route controller", () => {
     expect(screen.queryByTestId("image-review-screen")).not.toBeInTheDocument()
   })
 
-  it("routes dashboard Ingredient scanner to scanner entry with active profile context", async () => {
+  it("routes shell Ingredient scanner to scanner entry with active profile context", async () => {
     const user = renderPage()
     await goToDashboard(user)
 
-    await user.click(screen.getByRole("button", { name: "Open dashboard ingredient scanner" }))
+    await user.click(screen.getByRole("button", { name: "Shell Scan ingredient" }))
 
     expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
+    expectNoShell()
     expect(getScannerEntryReport()).toMatchObject({
       displayName: "Route Tester",
       mode: "profiled",
@@ -1368,12 +1837,13 @@ describe("Page route controller", () => {
     const user = renderPage()
     await goToDashboard(user)
 
-    await user.click(screen.getByRole("button", { name: "Open dashboard ingredient scanner" }))
+    await user.click(screen.getByRole("button", { name: "Shell Scan ingredient" }))
     expect(screen.getByTestId("scanner-entry-screen")).toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "Scanner entry back" }))
 
     expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+    expect(getShellActiveDestination()).toBe("home")
   })
 
   it("routes dashboard Change profile to profile management", async () => {
@@ -1388,6 +1858,200 @@ describe("Page route controller", () => {
       activeProfileId: "profile-001",
       activeDisplayName: "Route Tester",
     })
+  })
+
+  it("routes Profile management Manage sync settings to static host-shaped Account sync", async () => {
+    const user = renderPageWithInitialScreen("dashboard")
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+    await user.click(
+      screen.getByRole("button", { name: "Profile management open sync settings" }),
+    )
+
+    expect(screen.getByTestId("account-sync-screen")).toBeInTheDocument()
+    expect(getAccountSyncReport()).toMatchObject({
+      accountStatus: "signed-out",
+      accountStatusLabel: "Host status: signed out",
+      profileIds: ["profile-001", "profile-002"],
+      displayNames: ["Alex", "Maya"],
+      storageLabels: [
+        "Host label: saved locally on this device",
+        "Host label: saved locally on this device",
+      ],
+      syncActionKinds: ["enable", "enable"],
+      syncActionAvailability: [false, false],
+    })
+  })
+
+  it("returns from Account sync through Profile management back to the dashboard source", async () => {
+    const user = renderPageWithInitialScreen("dashboard")
+
+    await user.click(screen.getByRole("button", { name: "Dashboard change profile" }))
+    await user.click(
+      screen.getByRole("button", { name: "Profile management open sync settings" }),
+    )
+    await user.click(screen.getByRole("button", { name: "Account sync back" }))
+
+    expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Profile management back" }))
+
+    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+  })
+
+  it("returns from Account sync through Profile management back to an image-source source", async () => {
+    const user = renderPageWithInitialScreen("image-source")
+
+    await user.click(
+      screen.getByRole("button", { name: "Change profile from image source" }),
+    )
+    await user.click(
+      screen.getByRole("button", { name: "Profile management open sync settings" }),
+    )
+    await user.click(screen.getByRole("button", { name: "Account sync back" }))
+
+    expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Profile management back" }))
+
+    expect(screen.getByTestId("image-source-screen")).toBeInTheDocument()
+  })
+
+  it("keeps Account sync display names aligned with the controller-owned managed profile labels", async () => {
+    const user = renderPage()
+
+    await goToDashboardAccountSync(user)
+
+    expect(getAccountSyncReport()).toMatchObject({
+      displayNames: ["Route Tester", "Maya"],
+    })
+  })
+
+  it("keeps Account sync Sign-in as a future-adapter log only", async () => {
+    const user = renderPage()
+    await goToDashboardAccountSync(user)
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+
+    await user.click(screen.getByRole("button", { name: "Account sync request sign in" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Opening optional account sign-in through future adapter.",
+    )
+    expect(screen.getByTestId("account-sync-screen")).toBeInTheDocument()
+    expect(getAccountSyncReport().accountStatus).toBe("signed-out")
+  })
+
+  it("keeps Account sync Sign-out as a future-adapter log only", async () => {
+    const user = renderPage()
+    await goToDashboardAccountSync(user)
+    const initialReport = getAccountSyncReport()
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+
+    await user.click(screen.getByRole("button", { name: "Account sync request sign out" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Requesting optional account sign-out through future adapter.",
+    )
+    expect(screen.getByTestId("account-sync-screen")).toBeInTheDocument()
+    expect(getAccountSyncReport().report).toMatchObject(initialReport.report)
+  })
+
+  it("keeps Account sync enable and disable callbacks log-only and known-ID guarded", async () => {
+    const user = renderPage()
+    await goToDashboardAccountSync(user)
+    const initialReport = getAccountSyncReport()
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+
+    await user.click(screen.getByRole("button", { name: "Account sync enable profile-001" }))
+    await user.click(screen.getByRole("button", { name: "Account sync disable profile-002" }))
+    await user.click(
+      screen.getByRole("button", { name: "Account sync enable unknown profile" }),
+    )
+    await user.click(
+      screen.getByRole("button", { name: "Account sync disable unknown profile" }),
+    )
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Requesting profile sync enable through future adapter:",
+      "profile-001",
+    )
+    expect(logSpy).toHaveBeenCalledWith(
+      "Requesting profile sync removal through future adapter:",
+      "profile-002",
+    )
+    expect(logSpy).toHaveBeenCalledWith(
+      "Enable-sync request failed closed:",
+      "unknown-profile",
+    )
+    expect(logSpy).toHaveBeenCalledWith(
+      "Disable-sync request failed closed:",
+      "unknown-profile",
+    )
+    expect(screen.getByTestId("account-sync-screen")).toBeInTheDocument()
+    expect(getAccountSyncReport().report).toMatchObject(initialReport.report)
+  })
+
+  it("keeps Account sync privacy callbacks log-only and known-ID guarded", async () => {
+    const user = renderPage()
+    await goToDashboardAccountSync(user)
+    const initialReport = getAccountSyncReport()
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+
+    await user.click(
+      screen.getByRole("button", { name: "Account sync revoke consent profile-001" }),
+    )
+    await user.click(
+      screen.getByRole("button", { name: "Account sync delete facial data profile-001" }),
+    )
+    await user.click(
+      screen.getByRole("button", { name: "Account sync revoke consent unknown profile" }),
+    )
+    await user.click(
+      screen.getByRole("button", { name: "Account sync delete facial data unknown profile" }),
+    )
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Requesting consent revocation through future adapter:",
+      "profile-001",
+    )
+    expect(logSpy).toHaveBeenCalledWith(
+      "Requesting saved facial-data deletion through future adapter:",
+      "profile-001",
+    )
+    expect(logSpy).toHaveBeenCalledWith(
+      "Consent-revocation request failed closed:",
+      "unknown-profile",
+    )
+    expect(logSpy).toHaveBeenCalledWith(
+      "Facial-data deletion request failed closed:",
+      "unknown-profile",
+    )
+    expect(screen.getByTestId("account-sync-screen")).toBeInTheDocument()
+    expect(getAccountSyncReport().report).toMatchObject(initialReport.report)
+  })
+
+  it("keeps Account sync Retry as a future-adapter log only", async () => {
+    const user = renderPage()
+    await goToDashboardAccountSync(user)
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+
+    await user.click(screen.getByRole("button", { name: "Account sync retry" }))
+
+    expect(logSpy).toHaveBeenCalledWith(
+      "Retrying account and optional-sync load through future adapter.",
+    )
+    expect(screen.getByTestId("account-sync-screen")).toBeInTheDocument()
+  })
+
+  it("keeps Account sync route integration inside host-owned architecture boundaries", async () => {
+    const user = renderPage()
+
+    await goToDashboardAccountSync(user)
+
+    expect(screen.getByTestId("account-sync-screen")).toBeInTheDocument()
+    expect(getBodyTextOutsideAccountSyncReports()).not.toMatch(
+      /Screen 27|raw account URL|raw sync URL|browser history|routing library/i,
+    )
   })
 
   it("routes dashboard Latest report to results summary", async () => {
@@ -1406,30 +2070,53 @@ describe("Page route controller", () => {
     await user.click(screen.getByRole("button", { name: "Dashboard open routine" }))
 
     expect(screen.getByTestId("routine-screen")).toBeInTheDocument()
+    expect(getShellActiveDestination()).toBe("routine")
   })
 
-  it("routes dashboard Store to the store collection", async () => {
+  it("routes More Store to the store collection", async () => {
     const user = renderPage()
-    await goToDashboard(user)
+    await goToMore(user)
 
-    await user.click(screen.getByRole("button", { name: "Dashboard open store" }))
+    await user.click(screen.getByRole("button", { name: "More open Store" }))
 
     expect(screen.getByTestId("store-screen")).toBeInTheDocument()
+    expectNoShell()
   })
 
-  it("enables Dashboard Progress, Orders, and Recent-order details", async () => {
+  it("keeps simplified Dashboard actions visible without legacy secondary shortcuts", async () => {
     const user = renderPage()
     await goToDashboard(user)
 
     expect(screen.getByRole("button", { name: "Dashboard open progress" })).toBeEnabled()
-    expect(screen.getByRole("button", { name: "Dashboard open orders" })).toBeEnabled()
     expect(screen.getByRole("button", { name: "Dashboard open recent order" })).toBeEnabled()
+    expect(
+      screen.queryByRole("button", {
+        name: "Open dashboard ingredient scanner",
+      }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", {
+        name: "Dashboard open orders",
+      }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", {
+        name: "Dashboard open store",
+      }),
+    ).not.toBeInTheDocument()
+
+    expect(getJson("dashboard-props")).toMatchObject({
+      hasLegacyGuestScannerCallback: true,
+      hasLegacyOrdersCallback: false,
+      hasLegacyStoreCallback: true,
+    })
   })
 
-  it("routes Dashboard Orders to static host-shaped Order history", async () => {
+  it("routes More Orders to static host-shaped Order history", async () => {
     const user = renderPage()
     await goToDashboardOrderHistory(user)
 
+    expectNoShell()
     expect(getOrderHistoryReport()).toMatchObject({
       orderIds: ["order-001", "order-002"],
       referenceLabels: [
@@ -1475,13 +2162,14 @@ describe("Page route controller", () => {
     })
   })
 
-  it("returns from Order history Back to the dashboard", async () => {
+  it("returns from More-origin Order history Back to More", async () => {
     const user = renderPage()
     await goToDashboardOrderHistory(user)
 
     await user.click(screen.getByRole("button", { name: "Order history back" }))
 
-    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+    expect(screen.getByTestId("more-hub-screen")).toBeInTheDocument()
+    expect(getShellActiveDestination()).toBe("more")
   })
 
   it("returns from Order details Back to Order history after history View details", async () => {
@@ -1897,7 +2585,8 @@ describe("Page route controller", () => {
       const dashboardUser = renderPage()
       await goToDashboard(dashboardUser)
       setIntervalSpy.mockClear()
-      await dashboardUser.click(screen.getByRole("button", { name: "Dashboard open orders" }))
+      await dashboardUser.click(screen.getByRole("button", { name: "Shell More" }))
+      await dashboardUser.click(screen.getByRole("button", { name: "More open Orders" }))
       const initialHistoryReport = getOrderHistoryReport()
       const orderHistoryText =
         screen.getByTestId("order-history-screen").textContent ?? ""
@@ -1917,6 +2606,8 @@ describe("Page route controller", () => {
       expect(screen.getByTestId("order-history-screen")).toBeInTheDocument()
       expect(getOrderHistoryReport()).toMatchObject(initialHistoryReport)
       await dashboardUser.click(screen.getByRole("button", { name: "Order history back" }))
+      expect(screen.getByTestId("more-hub-screen")).toBeInTheDocument()
+      await dashboardUser.click(screen.getByRole("button", { name: "Shell Home" }))
       expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
       await dashboardUser.click(screen.getByRole("button", { name: "Dashboard open recent order" }))
       expect(screen.getByTestId("order-details-screen")).toBeInTheDocument()
@@ -2480,7 +3171,7 @@ describe("Page route controller", () => {
     const user = renderPage()
     await goToDashboard(user)
 
-    await user.click(screen.getByRole("button", { name: "Open dashboard ingredient scanner" }))
+    await user.click(screen.getByRole("button", { name: "Shell Scan ingredient" }))
     await user.click(screen.getByRole("button", { name: "Scanner entry change profile" }))
     expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
 
@@ -2497,7 +3188,7 @@ describe("Page route controller", () => {
     const user = renderPage()
     await goToDashboard(user)
 
-    await user.click(screen.getByRole("button", { name: "Open dashboard ingredient scanner" }))
+    await user.click(screen.getByRole("button", { name: "Shell Scan ingredient" }))
     await user.click(screen.getByRole("button", { name: "Scanner entry change profile" }))
     await user.click(screen.getByRole("button", { name: "Profile management select Maya" }))
 
@@ -2513,7 +3204,7 @@ describe("Page route controller", () => {
     const user = renderPage()
     await goToDashboard(user)
 
-    await user.click(screen.getByRole("button", { name: "Open dashboard ingredient scanner" }))
+    await user.click(screen.getByRole("button", { name: "Shell Scan ingredient" }))
     expect(getScannerEntryReport()).toMatchObject({
       profileId: "profile-001",
     })
@@ -3077,15 +3768,16 @@ describe("Page route controller", () => {
     expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
   })
 
-  it("returns from dashboard Store Back to the dashboard", async () => {
+  it("returns from More Store Back to More", async () => {
     const user = renderPage()
-    await goToDashboard(user)
+    await goToMore(user)
 
-    await user.click(screen.getByRole("button", { name: "Dashboard open store" }))
+    await user.click(screen.getByRole("button", { name: "More open Store" }))
     expect(screen.getByTestId("store-screen")).toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "Store back" }))
-    expect(screen.getByTestId("dashboard-screen")).toBeInTheDocument()
+    expect(screen.getByTestId("more-hub-screen")).toBeInTheDocument()
+    expect(getShellActiveDestination()).toBe("more")
   })
 
   it("resets first-time profile save image source Back to profile setup", async () => {
@@ -3104,7 +3796,7 @@ describe("Page route controller", () => {
     expect(screen.queryByTestId("profile-management-screen")).not.toBeInTheDocument()
   })
 
-  it("keeps future-adapter profile management actions as logs without route or fixture mutation", async () => {
+  it("keeps future-adapter profile management edit, delete, and retry actions as logs without route or fixture mutation", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
     const user = renderPage()
     await goToDashboard(user)
@@ -3113,14 +3805,12 @@ describe("Page route controller", () => {
     const initialSummary = getProfileManagementSummary()
 
     await user.click(screen.getByRole("button", { name: "Profile management edit Maya" }))
-    await user.click(screen.getByRole("button", { name: "Profile management open sync" }))
     await user.click(screen.getByRole("button", { name: "Profile management delete Maya" }))
     await user.click(screen.getByRole("button", { name: "Profile management retry" }))
 
     expect(screen.getByTestId("profile-management-screen")).toBeInTheDocument()
     expect(getProfileManagementSummary()).toMatchObject(initialSummary)
     expect(logSpy).toHaveBeenCalledWith("Editing profile:", "profile-002")
-    expect(logSpy).toHaveBeenCalledWith("Opening profile sync settings...")
     expect(logSpy).toHaveBeenCalledWith("Deleting profile:", "profile-002")
     expect(logSpy).toHaveBeenCalledWith("Retrying profile management load...")
   })
@@ -3161,24 +3851,25 @@ describe("Page route controller", () => {
     expect(screen.getByTestId("routine-screen")).toBeInTheDocument()
   })
 
-  it("passes host-owned dashboard fixture data and enables Orders route", async () => {
+  it("passes host-owned dashboard fixture data without legacy secondary shortcuts", async () => {
     const user = renderPage()
     await goToDashboard(user)
 
     const props = getJson("dashboard-props")
     expect(props).toMatchObject({
-      canOpenGuestScanner: true,
-      canOpenOrders: true,
       canOpenProgress: true,
       canOpenRecentOrder: true,
-      isGuestScannerAvailableOffline: false,
+      hasLegacyGuestScannerCallback: true,
+      hasLegacyOrdersCallback: false,
+      hasLegacyStoreCallback: true,
       showEnvironmentalModule: false,
     })
 
-    expect(screen.getByRole("button", { name: "Open dashboard ingredient scanner" })).toBeEnabled()
     expect(screen.getByRole("button", { name: "Dashboard open progress" })).toBeEnabled()
-    expect(screen.getByRole("button", { name: "Dashboard open orders" })).toBeEnabled()
     expect(screen.getByRole("button", { name: "Dashboard open recent order" })).toBeEnabled()
+    expect(screen.queryByRole("button", { name: "Open dashboard ingredient scanner" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Dashboard open orders" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Dashboard open store" })).not.toBeInTheDocument()
 
     const report = getJson("dashboard-report")
     expect(report.profile.profileId).toBe("profile-001")

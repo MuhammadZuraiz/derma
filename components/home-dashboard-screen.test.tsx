@@ -1,5 +1,3 @@
-import "@testing-library/jest-dom/vitest";
-
 import { StrictMode } from "react";
 import {
   act,
@@ -10,7 +8,14 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import { readFileSync } from "node:fs";
 
 import HomeDashboardScreen, {
   copy,
@@ -85,18 +90,27 @@ function createProps(
   };
 }
 
-function renderScreen(overrides: Partial<HomeDashboardScreenProps> = {}) {
-  return render(<HomeDashboardScreen {...createProps(overrides)} />);
+function renderScreen(
+  overrides: Partial<HomeDashboardScreenProps> = {},
+) {
+  const props = createProps(overrides);
+
+  return {
+    ...render(<HomeDashboardScreen {...props} />),
+    props,
+  };
 }
 
 function createDeferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason?: unknown) => void;
 
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
+  const promise = new Promise<T>(
+    (resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
+    },
+  );
 
   return { promise, reject, resolve };
 }
@@ -107,72 +121,82 @@ function expectOpaqueIdsNotRendered(container: HTMLElement) {
   }
 }
 
+function expectNoRouteCallbacksCalled(
+  props: HomeDashboardScreenProps,
+) {
+  for (const callback of [
+    props.onStartAnalysis,
+    props.onChangeProfile,
+    props.onOpenLatestReport,
+    props.onOpenRoutine,
+    props.onOpenGuestScanner,
+    props.onOpenProgress,
+    props.onOpenOrders,
+    props.onOpenStore,
+    props.onOpenRecentOrder,
+    props.onRetryLoad,
+  ]) {
+    if (typeof callback === "function") {
+      expect(callback).not.toHaveBeenCalled();
+    }
+  }
+}
+
+async function flushRejectedCallback() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
-describe("HomeDashboardScreen core states", () => {
+describe("HomeDashboardScreen runtime guards", () => {
   it("recognises only supported runtime states", () => {
     expect(isHomeDashboardState("loading")).toBe(true);
     expect(isHomeDashboardState("ready")).toBe(true);
     expect(isHomeDashboardState("empty")).toBe(true);
     expect(isHomeDashboardState("error")).toBe(true);
     expect(isHomeDashboardState("stale")).toBe(false);
+    expect(isHomeDashboardState(null)).toBe(false);
   });
 
-  it("renders the loading heading with polite static-only status semantics", () => {
-    renderScreen({ report: null, state: "loading" });
+  it("fails closed when Ready context is missing or malformed", () => {
+    const { rerender } = render(
+      <HomeDashboardScreen
+        {...createProps({
+          report: null,
+          state: "ready",
+        })}
+      />,
+    );
 
-    expect(
-      screen.getByRole("heading", {
-        level: 1,
-        name: copy.loadingHeading,
-      }),
-    ).toBeVisible();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      copy.errorHeading,
+    );
 
-    const status = screen.getByRole("status");
-    expect(status).toHaveAttribute("aria-live", "polite");
-    expect(status).toHaveTextContent(copy.loadingSupporting);
-    expect(within(status).queryByRole("button")).not.toBeInTheDocument();
-  });
+    rerender(
+      <HomeDashboardScreen
+        {...createProps({
+          report: {
+            ...defaultReport,
+            profile: {
+              ...defaultReport.profile,
+              profileId: " ",
+            },
+          },
+          state: "ready",
+        })}
+      />,
+    );
 
-  it("renders the ready heading and exactly one h1", () => {
-    renderScreen();
-
-    expect(
-      screen.getByRole("heading", {
-        level: 1,
-        name: copy.readyHeading,
-      }),
-    ).toBeVisible();
-    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-  });
-
-  it("uses a host-supplied greeting label without adding another h1", () => {
-    renderScreen({
-      report: {
-        ...defaultReport,
-        greetingLabel: "Welcome back, Maya",
-      },
-    });
-
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Welcome back, Maya" }),
-    ).toBeVisible();
-    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-  });
-
-  it("fails closed to error when ready state has a missing report", () => {
-    renderScreen({ report: null, state: "ready" });
-
-    expect(
-      screen.getByRole("heading", {
-        level: 1,
-        name: copy.errorHeading,
-      }),
-    ).toBeVisible();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      copy.errorHeading,
+    );
   });
 
   it.each([
@@ -181,9 +205,8 @@ describe("HomeDashboardScreen core states", () => {
     ["blank display name", { displayName: "" }],
     ["whitespace display name", { displayName: "   " }],
   ])(
-    "fails closed when required dashboard profile context has %s",
+    "fails closed when required profile context has %s",
     (_label, malformedProfile) => {
-      const onStartAnalysis = vi.fn();
       const report = {
         ...defaultReport,
         profile: {
@@ -192,338 +215,633 @@ describe("HomeDashboardScreen core states", () => {
         },
       };
 
-      renderScreen({ onStartAnalysis, report, state: "ready" });
+      renderScreen({ report, state: "ready" });
 
       expect(hasUsableHomeDashboardReport(report)).toBe(false);
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        copy.errorHeading,
+      );
       expect(
-        screen.getByRole("heading", {
-          level: 1,
-          name: copy.errorHeading,
+        screen.queryByRole("button", {
+          name: copy.startAnalysis,
         }),
-      ).toBeVisible();
-      expect(
-        screen.queryByRole("button", { name: copy.startAnalysis }),
       ).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole("button", { name: copy.startBlocked }),
-      ).not.toBeInTheDocument();
-      expect(onStartAnalysis).not.toHaveBeenCalled();
     },
   );
 
-  it("renders the empty dashboard state with readable first-scan copy", () => {
-    renderScreen({ state: "empty" });
+  it("fails malformed Empty profile context closed without rendering a blank shell", () => {
+    renderScreen({
+      report: {
+        ...defaultReport,
+        profile: {
+          ...defaultReport.profile,
+          displayName: " ",
+        },
+      },
+      state: "empty",
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      copy.errorHeading,
+    );
+    expect(
+      screen.queryByText(copy.emptyHeading),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps explicit Empty readable with usable profile context", () => {
+    renderScreen({
+      report: {
+        profile: defaultReport.profile,
+      },
+      state: "empty",
+    });
 
     expect(screen.getByText(copy.emptyHeading)).toBeVisible();
     expect(screen.getByText(copy.emptySupporting)).toBeVisible();
-    expect(screen.getByRole("button", { name: copy.startAnalysis })).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: copy.startAnalysis,
+      }),
+    ).toBeVisible();
+    expect(screen.getByText(copy.routineEmpty)).toBeVisible();
+    expect(
+      screen.getByText(copy.latestSnapshotEmpty),
+    ).toBeVisible();
   });
 
-  it("renders the error state and keeps retry outside the static alert", () => {
-    renderScreen({ onRetryLoad: vi.fn(), report: null, state: "error" });
-
-    const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent(copy.errorHeading);
-    expect(within(alert).queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: copy.retryLoad })).toBeVisible();
-  });
-
-  it("shows retry only when a retry callback is supplied", () => {
-    const { rerender } = renderScreen({ report: null, state: "error" });
-
-    expect(screen.queryByRole("button", { name: copy.retryLoad })).not.toBeInTheDocument();
-
-    rerender(
-      <HomeDashboardScreen
-        {...createProps({
-          onRetryLoad: vi.fn(),
-          report: null,
-          state: "error",
-        })}
-      />,
-    );
-
-    expect(screen.getByRole("button", { name: copy.retryLoad })).toBeVisible();
-  });
-
-  it("prevents duplicate retry activation and shows a retry pending label", async () => {
-    const deferred = createDeferred<void>();
-    const onRetryLoad = vi.fn(() => deferred.promise);
-
-    renderScreen({ onRetryLoad, report: null, state: "error" });
-
-    fireEvent.click(screen.getByRole("button", { name: copy.retryLoad }));
-    fireEvent.click(screen.getByRole("button", { name: copy.retryingLoad }));
-
-    expect(onRetryLoad).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: copy.retryingLoad })).toBeDisabled();
-
-    deferred.resolve(undefined);
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: copy.retryLoad })).toBeEnabled();
-    });
-  });
-
-  it("turns retry rejection into a non-blocking toast", async () => {
+  it("fails unknown runtime state closed into Error", () => {
     renderScreen({
-      onRetryLoad: vi.fn().mockRejectedValue(new Error("retry failed")),
-      report: null,
-      state: "error",
+      state: "mystery" as HomeDashboardState,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: copy.retryLoad }));
-
-    expect(await screen.findByText(copy.retryError)).toBeVisible();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      copy.errorHeading,
+    );
   });
+});
 
-  it("fails closed to error for an unknown runtime state", () => {
-    renderScreen({ state: "mystery" as HomeDashboardState });
+describe("HomeDashboardScreen simplified Ready hierarchy", () => {
+  it("renders semantic main content with one h1 and profile context first", () => {
+    const { container } = renderScreen();
+    const main = screen.getByRole("main");
+    const profileCard = screen.getByTestId("home-profile-card");
+    const startCard = screen.getByTestId("home-start-card");
 
+    expect(main).toBeVisible();
+    expect(container.querySelectorAll("h1")).toHaveLength(1);
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: copy.errorHeading,
+        name: copy.homeHeading,
       }),
     ).toBeVisible();
-  });
-});
-
-describe("HomeDashboardScreen profile and privacy", () => {
-  it("renders the trimmed profile display name, sync label, and local-first helper", () => {
-    renderScreen();
-
-    expect(screen.getByText("Maya")).toBeVisible();
+    expect(profileCard.compareDocumentPosition(startCard)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(screen.getByText("Welcome back, Maya")).toBeVisible();
     expect(screen.queryByText("  Maya  ")).not.toBeInTheDocument();
     expect(screen.getByText(defaultReport.profile.syncLabel)).toBeVisible();
     expect(screen.getByText(copy.localFirstHelper)).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: copy.changeProfile,
+      }),
+    ).toBeVisible();
   });
 
-  it("does not render sign-in or account creation UI", () => {
-    const { container } = renderScreen();
-
-    expect(container.textContent).not.toMatch(/sign in|create account|account required/i);
-  });
-
-  it("invokes Change profile without rendering the opaque profile ID", () => {
-    const onChangeProfile = vi.fn();
-    const { container } = renderScreen({ onChangeProfile });
-
-    fireEvent.click(screen.getByRole("button", { name: copy.changeProfile }));
-
-    expect(onChangeProfile).toHaveBeenCalledTimes(1);
-    expect(container.textContent).not.toContain(defaultReport.profile.profileId);
-  });
-
-  it("shows Change profile pending and rejection states", async () => {
-    const deferred = createDeferred<void>();
-    const onChangeProfile = vi
-      .fn()
-      .mockImplementationOnce(() => deferred.promise)
-      .mockRejectedValueOnce(new Error("profile route blocked"));
-
-    renderScreen({ onChangeProfile });
-
-    fireEvent.click(screen.getByRole("button", { name: copy.changeProfile }));
-    expect(screen.getByRole("button", { name: copy.changingProfile })).toBeDisabled();
-
-    deferred.resolve(undefined);
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: copy.changeProfile })).toBeEnabled();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: copy.changeProfile }));
-
-    expect(await screen.findByText(copy.changeProfileBlocked)).toBeVisible();
-  });
-});
-
-describe("HomeDashboardScreen start scan", () => {
-  it("passes profileId to onStartAnalysis and does not call it on mount", () => {
-    const onStartAnalysis = vi.fn();
-
-    renderScreen({ onStartAnalysis });
-
-    expect(onStartAnalysis).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: copy.startAnalysis }));
-
-    expect(onStartAnalysis).toHaveBeenCalledTimes(1);
-    expect(onStartAnalysis).toHaveBeenCalledWith(defaultReport.profile.profileId);
-  });
-
-  it("does not call route callbacks on rerender", () => {
-    const props = createProps();
-    const callbacks = [
-      props.onStartAnalysis,
-      props.onChangeProfile,
-      props.onOpenLatestReport,
-      props.onOpenRoutine,
-      props.onOpenGuestScanner,
-      props.onOpenProgress,
-      props.onOpenOrders,
-      props.onOpenStore,
-      props.onOpenRecentOrder,
-    ];
-
-    const { rerender } = render(<HomeDashboardScreen {...props} />);
-
-    rerender(<HomeDashboardScreen {...props} isOffline />);
-
-    for (const callback of callbacks) {
-      expect(callback).not.toHaveBeenCalled();
-    }
-  });
-
-  it("shows an action-scoped pending label and disables conflicting controls", async () => {
-    const deferred = createDeferred<void>();
-
-    renderScreen({
-      onStartAnalysis: vi.fn(() => deferred.promise),
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: copy.startAnalysis }));
-
-    expect(screen.getByRole("button", { name: copy.startingAnalysis })).toBeDisabled();
-    expect(screen.queryByText(copy.openingStore)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: copy.openStore })).toBeDisabled();
-
-    deferred.resolve(undefined);
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: copy.startAnalysis })).toBeEnabled();
-    });
-  });
-
-  it("prevents duplicate Start scan activation", () => {
-    const deferred = createDeferred<void>();
-    const onStartAnalysis = vi.fn(() => deferred.promise);
-
-    renderScreen({ onStartAnalysis });
-
-    fireEvent.click(screen.getByRole("button", { name: copy.startAnalysis }));
-    fireEvent.click(screen.getByRole("button", { name: copy.startingAnalysis }));
-
-    expect(onStartAnalysis).toHaveBeenCalledTimes(1);
-
-    deferred.resolve(undefined);
-  });
-
-  it("keeps blocked Start scan visible, inert, and leaves local content visible", () => {
-    const onStartAnalysis = vi.fn();
-
-    renderScreen({ canStartAnalysis: false, onStartAnalysis });
-
-    const button = screen.getByRole("button", { name: copy.startBlocked });
-    expect(button).toBeDisabled();
-    expect(screen.getByText(defaultReport.latestSnapshot!.categoryLabel)).toBeVisible();
-
-    fireEvent.click(button);
-
-    expect(onStartAnalysis).not.toHaveBeenCalled();
-  });
-
-  it("shows a toast when Start scan rejects", async () => {
-    renderScreen({
-      onStartAnalysis: vi.fn().mockRejectedValue(new Error("scan route rejected")),
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: copy.startAnalysis }));
-
-    expect(await screen.findByText(copy.startError)).toBeVisible();
-  });
-});
-
-describe("HomeDashboardScreen latest snapshot", () => {
-  it("renders host snapshot labels unchanged", () => {
-    renderScreen();
-
-    expect(screen.getByText(defaultReport.latestSnapshot!.capturedAtLabel)).toBeVisible();
-    expect(screen.getByText(defaultReport.latestSnapshot!.categoryLabel)).toBeVisible();
-    expect(screen.getByText(defaultReport.latestSnapshot!.comparisonLabel!)).toBeVisible();
-    expect(screen.getByText(defaultReport.latestSnapshot!.scoreLabel!)).toBeVisible();
-    expect(screen.getByText(defaultReport.latestSnapshot!.saveLabel!)).toBeVisible();
-  });
-
-  it("passes reportId to onOpenLatestReport and omits it from rendered text", () => {
-    const onOpenLatestReport = vi.fn();
-    const { container } = renderScreen({ onOpenLatestReport });
-
-    fireEvent.click(screen.getByRole("button", { name: copy.openLatestReport }));
-
-    expect(onOpenLatestReport).toHaveBeenCalledWith(defaultReport.latestSnapshot!.reportId);
-    expect(container.textContent).not.toContain(defaultReport.latestSnapshot!.reportId);
-  });
-
-  it.each(["", "   "])(
-    "keeps latest snapshot readable but blocks latest-report route when reportId is %j",
-    (reportId) => {
-      const onOpenLatestReport = vi.fn();
-
-      renderScreen({
-        onOpenLatestReport,
+  it.each([
+    ["undefined", undefined, null],
+    ["empty string", "", null],
+    ["whitespace string", "   ", null],
+    ["null", null, "null"],
+    ["number", 42, "42"],
+    ["object", {}, "[object Object]"],
+    ["array", [], null],
+  ])(
+    "falls back safely when optional greeting is %s",
+    (_label, greetingLabel, rawText) => {
+      const { container } = renderScreen({
         report: {
           ...defaultReport,
-          latestSnapshot: {
-            ...defaultReport.latestSnapshot!,
-            reportId,
+          greetingLabel:
+            greetingLabel as unknown as HomeDashboardReport["greetingLabel"],
+        },
+      });
+
+      expect(screen.getByText("Welcome back, Maya")).toBeVisible();
+      if (rawText) {
+        expect(container.textContent).not.toContain(rawText);
+      }
+      expect(container.querySelectorAll("h1")).toHaveLength(1);
+      expect(
+        screen.getByRole("button", {
+          name: copy.startAnalysis,
+        }),
+      ).not.toBeDisabled();
+      expectOpaqueIdsNotRendered(container);
+    },
+  );
+
+  it("trims valid host-supplied greeting copy", () => {
+    const { container } = renderScreen({
+      report: {
+        ...defaultReport,
+        greetingLabel: "  Good to see you again  ",
+      },
+    });
+
+    expect(
+      screen.getByText("Good to see you again"),
+    ).toBeVisible();
+    expect(container.textContent).not.toContain(
+      "  Good to see you again  ",
+    );
+    expect(container.querySelectorAll("h1")).toHaveLength(1);
+    expect(
+      screen.getByRole("button", {
+        name: copy.startAnalysis,
+      }),
+    ).not.toBeDisabled();
+  });
+
+  it.each([
+    ["empty string", ""],
+    ["whitespace string", "   "],
+    ["null", null],
+    ["number", 42],
+    ["object", {}],
+    ["array", []],
+  ])(
+    "renders neutral profile storage fallback when sync label is %s",
+    (_label, syncLabel) => {
+      const { container } = renderScreen({
+        report: {
+          ...defaultReport,
+          profile: {
+            ...defaultReport.profile,
+            syncLabel:
+              syncLabel as unknown as HomeDashboardReport["profile"]["syncLabel"],
           },
         },
       });
 
-      expect(screen.getByText(defaultReport.latestSnapshot!.capturedAtLabel)).toBeVisible();
-      expect(screen.getByText(defaultReport.latestSnapshot!.categoryLabel)).toBeVisible();
-
-      const button = screen.getByRole("button", {
-        name: copy.latestReportBlocked,
-      });
-      expect(button).toBeDisabled();
-
-      fireEvent.click(button);
-
-      expect(onOpenLatestReport).not.toHaveBeenCalled();
+      expect(
+        screen.getByText(copy.profileSyncFallback),
+      ).toBeVisible();
+      expect(container.textContent).not.toContain("[object Object]");
+      expect(
+        screen.getByRole("button", {
+          name: copy.startAnalysis,
+        }),
+      ).not.toBeDisabled();
     },
   );
 
-  it("renders a safe image alt fallback when host alt is blank", () => {
-    renderScreen({
-      report: {
-        ...defaultReport,
-        latestSnapshot: {
-          ...defaultReport.latestSnapshot!,
-          imageAlt: "   ",
-        },
-      },
-    });
+  it("renders the simplified card order and keeps toast last", () => {
+    renderScreen();
 
-    expect(screen.getByRole("img", { name: copy.snapshotImageAlt })).toBeVisible();
+    const main = screen.getByRole("main");
+    const profile = screen.getByTestId("home-profile-card");
+    const start = screen.getByTestId("home-start-card");
+    const routine = screen.getByTestId("home-routine-card");
+    const journey = screen.getByTestId(
+      "home-skin-journey-card",
+    );
+    const attention = screen.getByTestId("home-attention-card");
+    const toast = screen.getByTestId("home-dashboard-toast");
+
+    expect(
+      screen.getByRole("heading", {
+        name: copy.startCardTitle,
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("heading", {
+        name: copy.routineTitle,
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("heading", {
+        name: copy.skinJourneyTitle,
+      }),
+    ).toBeVisible();
+    expect(profile.compareDocumentPosition(start)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(start.compareDocumentPosition(routine)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(routine.compareDocumentPosition(journey)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(journey.compareDocumentPosition(attention)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(attention.compareDocumentPosition(toast)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(main.lastElementChild?.lastElementChild).toBe(toast);
   });
 
-  it("renders a supplied snapshot image alt", () => {
+  it("places the offline banner before actionable cards", () => {
+    renderScreen({
+      isOffline: true,
+    });
+
+    const offline = screen.getByRole("status", {
+      name: "",
+    });
+    const start = screen.getByTestId("home-start-card");
+
+    expect(offline).toHaveTextContent(copy.offline);
+    expect(offline.compareDocumentPosition(start)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it("does not render a persistent shortcut grid, bottom navigation, or shell markup", () => {
+    const { container } = renderScreen();
+
+    expect(container.querySelector("nav")).toBeNull();
+    expect(
+      screen.queryByRole("heading", {
+        name: /quick actions/i,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open store" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open orders" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open scanner" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("HomeDashboardScreen legacy shortcut compatibility", () => {
+  it("accepts legacy Store, Orders, and Ingredient scanner callbacks without rendering controls", () => {
+    const { props } = renderScreen();
+
+    expect(
+      screen.queryByRole("button", { name: /store/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /orders/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: /ingredient scanner/i,
+      }),
+    ).not.toBeInTheDocument();
+    expect(props.onOpenStore).not.toHaveBeenCalled();
+    expect(props.onOpenOrders).not.toHaveBeenCalled();
+    expect(props.onOpenGuestScanner).not.toHaveBeenCalled();
+  });
+
+  it("does not invoke legacy callbacks during mount or rerender", () => {
+    const props = createProps();
+    const { rerender } = render(
+      <HomeDashboardScreen {...props} />,
+    );
+
+    expectNoRouteCallbacksCalled(props);
+
+    rerender(
+      <HomeDashboardScreen {...props} isOffline={true} />,
+    );
+
+    expect(props.onOpenStore).not.toHaveBeenCalled();
+    expect(props.onOpenOrders).not.toHaveBeenCalled();
+    expect(props.onOpenGuestScanner).not.toHaveBeenCalled();
+  });
+});
+
+describe("HomeDashboardScreen primary facial scan CTA", () => {
+  it("invokes only the existing start callback with the callback-only profile ID", () => {
+    const onStartAnalysis = vi.fn();
+    const onOpenRoutine = vi.fn();
+    const { container } = renderScreen({
+      onOpenRoutine,
+      onStartAnalysis,
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: copy.startAnalysis,
+      }),
+    );
+
+    expect(onStartAnalysis).toHaveBeenCalledTimes(1);
+    expect(onStartAnalysis).toHaveBeenCalledWith(
+      defaultReport.profile.profileId,
+    );
+    expect(onOpenRoutine).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain(
+      defaultReport.profile.profileId,
+    );
+  });
+
+  it("fails closed visibly when the start callback is missing", () => {
+    renderScreen({
+      onStartAnalysis:
+        undefined as unknown as HomeDashboardScreenProps["onStartAnalysis"],
+    });
+
+    const button = screen.getByRole("button", {
+      name: copy.startBlocked,
+    });
+
+    expect(button).toBeDisabled();
+  });
+
+  it("uses reconnect copy only when offline capability is the remaining blocker", () => {
+    const { rerender } = renderScreen({
+      isOffline: true,
+    });
+
+    expect(
+      screen.getByRole("button", {
+        name: copy.startOfflineBlocked,
+      }),
+    ).toBeDisabled();
+
+    rerender(
+      <HomeDashboardScreen
+        {...createProps({
+          canStartAnalysis: false,
+          isOffline: true,
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: copy.startBlocked,
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole("button", {
+        name: copy.startOfflineBlocked,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the facial scan callback enabled offline when the host allows it", () => {
+    const onStartAnalysis = vi.fn();
+
+    renderScreen({
+      isOffline: true,
+      isStartAnalysisAvailableOffline: true,
+      onStartAnalysis,
+    });
+
+    const button = screen.getByRole("button", {
+      name: copy.startAnalysis,
+    });
+
+    expect(button).not.toBeDisabled();
+    fireEvent.click(button);
+    expect(onStartAnalysis).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows scoped pending copy and rejects duplicate and conflicting forced activation", async () => {
+    const pending = createDeferred();
+    const onStartAnalysis = vi.fn(() => pending.promise);
+    const onOpenRoutine = vi.fn();
+
+    renderScreen({
+      onOpenRoutine,
+      onStartAnalysis,
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: copy.startAnalysis,
+      }),
+    );
+
+    expect(onStartAnalysis).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", {
+        name: copy.startingAnalysis,
+      }),
+    ).toBeDisabled();
+
+    const pendingButton = screen.getByRole("button", {
+      name: copy.startingAnalysis,
+    });
+    pendingButton.removeAttribute("disabled");
+    fireEvent.click(pendingButton);
+
+    const routineButton = screen.getByRole("button", {
+      name: copy.openRoutine,
+    });
+    routineButton.removeAttribute("disabled");
+    fireEvent.click(routineButton);
+
+    expect(onStartAnalysis).toHaveBeenCalledTimes(1);
+    expect(onOpenRoutine).not.toHaveBeenCalled();
+
+    await act(async () => {
+      pending.resolve();
+      await pending.promise;
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", {
+          name: copy.startAnalysis,
+        }),
+      ).not.toBeDisabled();
+    });
+  });
+
+  it("converts facial scan rejection into a local toast", async () => {
+    renderScreen({
+      onStartAnalysis: vi
+        .fn()
+        .mockRejectedValue(new Error("no")),
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: copy.startAnalysis,
+      }),
+    );
+    await flushRejectedCallback();
+
+    expect(screen.getByTestId("home-dashboard-toast")).toHaveTextContent(
+      copy.startError,
+    );
+  });
+});
+
+describe("HomeDashboardScreen routine card", () => {
+  it("renders host routine labels and passes routine ID callback-only", () => {
+    const onOpenRoutine = vi.fn();
+    const { container } = renderScreen({ onOpenRoutine });
+
+    expect(screen.getByText(defaultReport.routine!.title)).toBeVisible();
+    expect(screen.getByText(defaultReport.routine!.supporting)).toBeVisible();
+    expect(
+      screen.getByText(defaultReport.routine!.morningSummaryLabel!),
+    ).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: copy.openRoutine,
+      }),
+    );
+
+    expect(onOpenRoutine).toHaveBeenCalledWith(
+      defaultReport.routine!.routineId,
+    );
+    expect(container.textContent).not.toContain(
+      defaultReport.routine!.routineId,
+    );
+  });
+
+  it.each(["", "   "])(
+    "keeps routine readable but blocks action when routineId is %j",
+    (routineId) => {
+      const onOpenRoutine = vi.fn();
+
+      renderScreen({
+        onOpenRoutine,
+        report: {
+          ...defaultReport,
+          routine: {
+            ...defaultReport.routine!,
+            routineId,
+          },
+        },
+      });
+
+      expect(screen.getByText(defaultReport.routine!.title)).toBeVisible();
+      const button = screen.getByRole("button", {
+        name: copy.routineBlocked,
+      });
+      expect(button).toBeDisabled();
+      button.removeAttribute("disabled");
+      fireEvent.click(button);
+      expect(onOpenRoutine).not.toHaveBeenCalled();
+    },
+  );
+
+  it("handles missing callback, host block, and offline reconnect precedence", () => {
+    const { rerender } = renderScreen({
+      onOpenRoutine: undefined,
+    });
+
+    expect(
+      screen.getByRole("button", {
+        name: copy.routineBlocked,
+      }),
+    ).toBeDisabled();
+
+    rerender(
+      <HomeDashboardScreen
+        {...createProps({
+          canOpenRoutine: false,
+          isOffline: true,
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: copy.routineBlocked,
+      }),
+    ).toBeDisabled();
+
+    rerender(
+      <HomeDashboardScreen
+        {...createProps({
+          isOffline: true,
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: copy.routineOfflineBlocked,
+      }),
+    ).toBeDisabled();
+  });
+
+  it("does not render a Store shortcut inside the routine card", () => {
     renderScreen();
 
     expect(
-      screen.getByRole("img", { name: defaultReport.latestSnapshot!.imageAlt! }),
-    ).toBeVisible();
+      within(screen.getByTestId("home-routine-card")).queryByRole(
+        "button",
+        { name: /store/i },
+      ),
+    ).not.toBeInTheDocument();
   });
 
-  it("renders a readable placeholder when snapshot image URL is missing", () => {
+  it("uses neutral routine fallbacks and omits malformed optional routine metadata without blocking route access", () => {
     renderScreen({
       report: {
         ...defaultReport,
-        latestSnapshot: {
-          ...defaultReport.latestSnapshot!,
-          imageUrl: undefined,
+        routine: {
+          ...defaultReport.routine!,
+          title: {} as unknown as string,
+          supporting: [] as unknown as string,
+          updatedAtLabel: 42 as unknown as string,
+          morningSummaryLabel: "   ",
+          eveningSummaryLabel: null as unknown as string,
         },
       },
     });
 
-    expect(screen.getByText(copy.snapshotImagePlaceholder)).toBeVisible();
+    const card = screen.getByTestId("home-routine-card");
+
+    expect(
+      screen.getByText(copy.routineTitleFallback),
+    ).toBeVisible();
+    expect(
+      screen.getByText(copy.routineSupportingFallback),
+    ).toBeVisible();
+    expect(within(card).queryByText("Updated")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Morning")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Evening")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: copy.openRoutine,
+      }),
+    ).not.toBeDisabled();
+  });
+});
+
+describe("HomeDashboardScreen Skin journey card", () => {
+  it("renders snapshot image and host latest-report labels unchanged", () => {
+    renderScreen();
+
+    expect(
+      screen.getByRole("img", {
+        name: defaultReport.latestSnapshot!.imageAlt!,
+      }),
+    ).toHaveAttribute("src", "/latest-snapshot.jpg");
+    expect(
+      screen.getByText(defaultReport.latestSnapshot!.capturedAtLabel),
+    ).toBeVisible();
+    expect(
+      screen.getByText(defaultReport.latestSnapshot!.categoryLabel),
+    ).toBeVisible();
+    expect(
+      screen.getByText(defaultReport.latestSnapshot!.comparisonLabel!),
+    ).toBeVisible();
+    expect(
+      screen.getByText(defaultReport.latestSnapshot!.scoreLabel!),
+    ).toBeVisible();
   });
 
-  it("treats a whitespace-only snapshot image URL as absent", () => {
-    renderScreen({
+  it("uses placeholder for whitespace URL, failed image, and retries replacement URL", () => {
+    const { rerender } = renderScreen({
       report: {
         ...defaultReport,
         latestSnapshot: {
@@ -533,23 +851,20 @@ describe("HomeDashboardScreen latest snapshot", () => {
       },
     });
 
-    expect(screen.getByText(copy.snapshotImagePlaceholder)).toBeVisible();
+    expect(
+      screen.getByText(copy.snapshotImagePlaceholder),
+    ).toBeVisible();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
-  });
 
-  it("renders a readable placeholder after snapshot image failure", () => {
-    renderScreen();
-
-    fireEvent.error(screen.getByRole("img", { name: defaultReport.latestSnapshot!.imageAlt! }));
-
-    expect(screen.getByText(copy.snapshotImagePlaceholder)).toBeVisible();
-  });
-
-  it("retries rendering when the host supplies a replacement snapshot image URL", () => {
-    const { rerender } = renderScreen();
-
-    fireEvent.error(screen.getByRole("img", { name: defaultReport.latestSnapshot!.imageAlt! }));
-    expect(screen.getByText(copy.snapshotImagePlaceholder)).toBeVisible();
+    rerender(<HomeDashboardScreen {...createProps()} />);
+    fireEvent.error(
+      screen.getByRole("img", {
+        name: defaultReport.latestSnapshot!.imageAlt!,
+      }),
+    );
+    expect(
+      screen.getByText(copy.snapshotImagePlaceholder),
+    ).toBeVisible();
 
     rerender(
       <HomeDashboardScreen
@@ -566,649 +881,847 @@ describe("HomeDashboardScreen latest snapshot", () => {
     );
 
     expect(
-      screen.getByRole("img", { name: defaultReport.latestSnapshot!.imageAlt! }),
+      screen.getByRole("img", {
+        name: defaultReport.latestSnapshot!.imageAlt!,
+      }),
     ).toHaveAttribute("src", "/replacement-snapshot.jpg");
   });
 
-  it("renders a readable empty replacement when latest snapshot is absent", () => {
-    renderScreen({
-      report: {
-        ...defaultReport,
-        latestSnapshot: undefined,
-      },
-    });
-
-    expect(screen.getByText(copy.latestSnapshotEmpty)).toBeVisible();
-    expect(screen.getByText(copy.latestSnapshotEmptySupporting)).toBeVisible();
-  });
-
-  it("keeps blocked latest-report action visible and inert", () => {
-    const onOpenLatestReport = vi.fn();
-
-    renderScreen({ canOpenLatestReport: false, onOpenLatestReport });
-
-    const button = screen.getByRole("button", { name: copy.latestReportBlocked });
-    expect(button).toBeDisabled();
-
-    fireEvent.click(button);
-
-    expect(onOpenLatestReport).not.toHaveBeenCalled();
-  });
-
-  it("shows a toast when latest-report route rejects", async () => {
-    renderScreen({
-      onOpenLatestReport: vi.fn().mockRejectedValue(new Error("report route rejected")),
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: copy.openLatestReport }));
-
-    expect(await screen.findByText(copy.latestReportError)).toBeVisible();
-  });
-});
-
-describe("HomeDashboardScreen routine", () => {
-  it("renders host routine labels, passes routineId, and omits the opaque ID", () => {
-    const onOpenRoutine = vi.fn();
-    const { container } = renderScreen({ onOpenRoutine });
-
-    expect(screen.getByText(defaultReport.routine!.title)).toBeVisible();
-    expect(screen.getByText(defaultReport.routine!.supporting)).toBeVisible();
-    expect(screen.getByText(defaultReport.routine!.morningSummaryLabel!)).toBeVisible();
-
-    fireEvent.click(screen.getByRole("button", { name: copy.openRoutine }));
-
-    expect(onOpenRoutine).toHaveBeenCalledWith(defaultReport.routine!.routineId);
-    expect(container.textContent).not.toContain(defaultReport.routine!.routineId);
-  });
-
-  it.each(["", "   "])(
-    "keeps routine readable but blocks routine route when routineId is %j",
-    (routineId) => {
-      const onOpenRoutine = vi.fn();
-
+  it.each([
+    ["undefined", undefined],
+    ["empty string", ""],
+    ["whitespace string", "   "],
+    ["null", null],
+    ["number", 42],
+    ["object", {}],
+    ["array", []],
+  ])(
+    "uses fallback snapshot image alt when alt is %s",
+    (_label, imageAlt) => {
       renderScreen({
-        onOpenRoutine,
         report: {
           ...defaultReport,
-          routine: {
-            ...defaultReport.routine!,
-            routineId,
+          latestSnapshot: {
+            ...defaultReport.latestSnapshot!,
+            imageAlt: imageAlt as unknown as string,
           },
         },
       });
 
-      expect(screen.getByText(defaultReport.routine!.title)).toBeVisible();
-      expect(screen.getByText(defaultReport.routine!.supporting)).toBeVisible();
-
-      const button = screen.getByRole("button", {
-        name: copy.routineBlocked,
-      });
-      expect(button).toBeDisabled();
-
-      fireEvent.click(button);
-
-      expect(onOpenRoutine).not.toHaveBeenCalled();
+      expect(
+        screen.getByRole("img", {
+          name: copy.snapshotImageAlt,
+        }),
+      ).toBeVisible();
     },
   );
 
-  it("renders a readable empty replacement when routine is absent", () => {
+  it("trims valid snapshot alt text", () => {
     renderScreen({
       report: {
         ...defaultReport,
-        routine: undefined,
+        latestSnapshot: {
+          ...defaultReport.latestSnapshot!,
+          imageAlt: "  Maya refreshed snapshot  ",
+        },
       },
     });
 
-    expect(screen.getByText(copy.routineEmpty)).toBeVisible();
-    expect(screen.getByText(copy.routineEmptySupporting)).toBeVisible();
+    expect(
+      screen.getByRole("img", {
+        name: "Maya refreshed snapshot",
+      }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("img", {
+        name: "  Maya refreshed snapshot  ",
+      }),
+    ).not.toBeInTheDocument();
   });
 
-  it("keeps blocked routine action visible and reports rejection through toast", async () => {
-    const onOpenRoutine = vi.fn();
-    const { rerender } = renderScreen({
-      canOpenRoutine: false,
-      onOpenRoutine,
+  it("keeps latest summary readable while blank report ID disables report action", () => {
+    const onOpenLatestReport = vi.fn();
+
+    renderScreen({
+      onOpenLatestReport,
+      report: {
+        ...defaultReport,
+        latestSnapshot: {
+          ...defaultReport.latestSnapshot!,
+          reportId: " ",
+        },
+      },
     });
 
-    const blockedButton = screen.getByRole("button", { name: copy.routineBlocked });
-    expect(blockedButton).toBeDisabled();
-    fireEvent.click(blockedButton);
-    expect(onOpenRoutine).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(defaultReport.latestSnapshot!.categoryLabel),
+    ).toBeVisible();
+    const button = screen.getByRole("button", {
+      name: copy.latestReportBlocked,
+    });
+    expect(button).toBeDisabled();
+    button.removeAttribute("disabled");
+    fireEvent.click(button);
+    expect(onOpenLatestReport).not.toHaveBeenCalled();
+  });
 
-    rerender(
-      <HomeDashboardScreen
-        {...createProps({
-          onOpenRoutine: vi.fn().mockRejectedValue(new Error("routine rejected")),
-        })}
-      />,
+  it("opens latest report and progress through independent callbacks", async () => {
+    const onOpenLatestReport = vi.fn();
+    const onOpenProgress = vi.fn();
+
+    renderScreen({ onOpenLatestReport, onOpenProgress });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: copy.openLatestReport,
+      }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: copy.openRoutine }));
-
-    expect(await screen.findByText(copy.routineError)).toBeVisible();
-  });
-});
-
-describe("HomeDashboardScreen quick actions", () => {
-  it("invokes the scanner callback", () => {
-    const onOpenGuestScanner = vi.fn();
-
-    renderScreen({ onOpenGuestScanner });
-
-    fireEvent.click(screen.getByRole("button", { name: copy.openScanner }));
-
-    expect(onOpenGuestScanner).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps scanner visible but blocked when offline scanning is unsupported", () => {
-    const onOpenGuestScanner = vi.fn();
-
-    renderScreen({
-      isGuestScannerAvailableOffline: false,
-      isOffline: true,
-      onOpenGuestScanner,
-    });
-
-    const button = screen.getByRole("button", { name: copy.scannerOfflineBlocked });
-    expect(button).toBeDisabled();
-    expect(screen.getByText(copy.scannerTitle)).toBeVisible();
-
-    fireEvent.click(button);
-
-    expect(onOpenGuestScanner).not.toHaveBeenCalled();
-  });
-
-  it("shows scanner rejection toast", async () => {
-    renderScreen({
-      onOpenGuestScanner: vi.fn().mockRejectedValue(new Error("scanner rejected")),
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: copy.openScanner }));
-
-    expect(await screen.findByText(copy.scannerError)).toBeVisible();
-  });
-
-  it("handles progress callback, blocked state, and rejection toast", async () => {
-    const onOpenProgress = vi.fn();
-    const { rerender } = renderScreen({ onOpenProgress });
-
-    fireEvent.click(screen.getByRole("button", { name: copy.openProgress }));
-    expect(onOpenProgress).toHaveBeenCalledTimes(1);
+    expect(onOpenLatestReport).toHaveBeenCalledWith(
+      defaultReport.latestSnapshot!.reportId,
+    );
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: copy.openProgress })).toBeEnabled();
+      expect(
+        screen.getByRole("button", {
+          name: copy.openProgress,
+        }),
+      ).not.toBeDisabled();
     });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: copy.openProgress,
+      }),
+    );
+
+    expect(onOpenProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows report action and progress action to block independently", () => {
+    const { rerender } = renderScreen({
+      canOpenLatestReport: false,
+    });
+
+    expect(
+      screen.getByRole("button", {
+        name: copy.latestReportBlocked,
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", {
+        name: copy.openProgress,
+      }),
+    ).not.toBeDisabled();
 
     rerender(
       <HomeDashboardScreen
         {...createProps({
           canOpenProgress: false,
-          onOpenProgress,
         })}
       />,
     );
-    expect(screen.getByRole("button", { name: copy.progressBlocked })).toBeDisabled();
 
-    rerender(
-      <HomeDashboardScreen
-        {...createProps({
-          onOpenProgress: vi.fn().mockRejectedValue(new Error("progress rejected")),
-        })}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: copy.openProgress }));
-
-    expect(await screen.findByText(copy.progressError)).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: copy.openLatestReport,
+      }),
+    ).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", {
+        name: copy.progressBlocked,
+      }),
+    ).toBeDisabled();
   });
 
-  it("handles orders callback, blocked state, and rejection toast", async () => {
-    const onOpenOrders = vi.fn();
-    const { rerender } = renderScreen({ onOpenOrders });
-
-    fireEvent.click(screen.getByRole("button", { name: copy.openOrders }));
-    expect(onOpenOrders).toHaveBeenCalledTimes(1);
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: copy.openOrders })).toBeEnabled();
+  it("uses reconnect labels for report and progress only when offline is the remaining blocker", () => {
+    const { rerender } = renderScreen({
+      isOffline: true,
     });
 
-    rerender(
-      <HomeDashboardScreen
-        {...createProps({
-          canOpenOrders: false,
-          onOpenOrders,
-        })}
-      />,
-    );
-    expect(screen.getByRole("button", { name: copy.ordersBlocked })).toBeDisabled();
+    expect(
+      screen.getByRole("button", {
+        name: copy.latestReportOfflineBlocked,
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", {
+        name: copy.progressOfflineBlocked,
+      }),
+    ).toBeDisabled();
 
     rerender(
       <HomeDashboardScreen
         {...createProps({
-          onOpenOrders: vi.fn().mockRejectedValue(new Error("orders rejected")),
+          canOpenProgress: false,
+          isOffline: true,
         })}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: copy.openOrders }));
 
-    expect(await screen.findByText(copy.ordersError)).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: copy.progressBlocked,
+      }),
+    ).toBeDisabled();
   });
 
-  it("handles store callback, blocked state, and rejection toast", async () => {
-    const onOpenStore = vi.fn();
-    const { rerender } = renderScreen({ onOpenStore });
-
-    fireEvent.click(screen.getByRole("button", { name: copy.openStore }));
-    expect(onOpenStore).toHaveBeenCalledTimes(1);
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: copy.openStore })).toBeEnabled();
+  it("uses neutral snapshot summary fallbacks and omits malformed optional snapshot metadata without blocking report access", () => {
+    renderScreen({
+      report: {
+        ...defaultReport,
+        latestSnapshot: {
+          ...defaultReport.latestSnapshot!,
+          capturedAtLabel: {} as unknown as string,
+          categoryLabel: [] as unknown as string,
+          comparisonLabel: 42 as unknown as string,
+          scoreLabel: "   ",
+          saveLabel: null as unknown as string,
+        },
+      },
     });
 
-    rerender(
-      <HomeDashboardScreen
-        {...createProps({
-          canOpenStore: false,
-          onOpenStore,
-        })}
-      />,
-    );
-    expect(screen.getByRole("button", { name: copy.storeBlocked })).toBeDisabled();
+    const card = screen.getByTestId("home-skin-journey-card");
 
-    rerender(
-      <HomeDashboardScreen
-        {...createProps({
-          onOpenStore: vi.fn().mockRejectedValue(new Error("store rejected")),
-        })}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: copy.openStore }));
+    expect(
+      screen.getByText(copy.snapshotCapturedFallback),
+    ).toBeVisible();
+    expect(
+      screen.getByText(copy.snapshotCategoryFallback),
+    ).toBeVisible();
+    expect(within(card).queryByText("Host label")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Host summary")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Saved")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: copy.openLatestReport,
+      }),
+    ).not.toBeDisabled();
+  });
 
-    expect(await screen.findByText(copy.storeError)).toBeVisible();
+  it("trims usable host summary copy before rendering without changing route availability", () => {
+    renderScreen({
+      report: {
+        ...defaultReport,
+        latestSnapshot: {
+          ...defaultReport.latestSnapshot!,
+          categoryLabel: "  Host-trimmed summary  ",
+        },
+      },
+    });
+
+    expect(
+      screen.getByText("Host-trimmed summary"),
+    ).toBeVisible();
+    expect(
+      screen.queryByText("  Host-trimmed summary  "),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: copy.openLatestReport,
+      }),
+    ).not.toBeDisabled();
   });
 });
 
-describe("HomeDashboardScreen recent order", () => {
-  it("omits the recent order card when no recent order is supplied", () => {
+describe("HomeDashboardScreen conditional attention priority", () => {
+  it("renders recent order as the only attention card when supplied", () => {
+    renderScreen({ showEnvironmentalModule: true });
+
+    expect(screen.getByTestId("home-attention-card")).toHaveTextContent(
+      copy.recentOrderTitle,
+    );
+    expect(
+      screen.getByText(defaultReport.recentOrder!.orderReferenceLabel),
+    ).toBeVisible();
+    expect(
+      screen.queryByText(defaultReport.environment!.uvLabel!),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders environmental card when no order exists and UV or AQI is usable", () => {
     renderScreen({
       report: {
         ...defaultReport,
         recentOrder: undefined,
       },
-    });
-
-    expect(screen.queryByText(copy.recentOrderTitle)).not.toBeInTheDocument();
-  });
-
-  it("renders safe host order labels, passes orderId, and omits the opaque ID", () => {
-    const onOpenRecentOrder = vi.fn();
-    const { container } = renderScreen({ onOpenRecentOrder });
-
-    expect(screen.getByText(defaultReport.recentOrder!.orderReferenceLabel)).toBeVisible();
-    expect(screen.getByText(defaultReport.recentOrder!.statusLabel)).toBeVisible();
-
-    fireEvent.click(screen.getByRole("button", { name: copy.openRecentOrder }));
-
-    expect(onOpenRecentOrder).toHaveBeenCalledWith(defaultReport.recentOrder!.orderId);
-    expect(container.textContent).not.toContain(defaultReport.recentOrder!.orderId);
-  });
-
-  it.each(["", "   "])(
-    "keeps recent order readable but blocks order route when orderId is %j",
-    (orderId) => {
-      const onOpenRecentOrder = vi.fn();
-
-      renderScreen({
-        onOpenRecentOrder,
-        report: {
-          ...defaultReport,
-          recentOrder: {
-            ...defaultReport.recentOrder!,
-            orderId,
-          },
-        },
-      });
-
-      expect(screen.getByText(defaultReport.recentOrder!.orderReferenceLabel)).toBeVisible();
-      expect(screen.getByText(defaultReport.recentOrder!.statusLabel)).toBeVisible();
-
-      const button = screen.getByRole("button", {
-        name: copy.recentOrderBlocked,
-      });
-      expect(button).toBeDisabled();
-
-      fireEvent.click(button);
-
-      expect(onOpenRecentOrder).not.toHaveBeenCalled();
-    },
-  );
-
-  it("keeps blocked order details visible and reports rejection through toast", async () => {
-    const onOpenRecentOrder = vi.fn();
-    const { rerender } = renderScreen({
-      canOpenRecentOrder: false,
-      onOpenRecentOrder,
-    });
-
-    const blockedButton = screen.getByRole("button", {
-      name: copy.recentOrderBlocked,
-    });
-    expect(blockedButton).toBeDisabled();
-    fireEvent.click(blockedButton);
-    expect(onOpenRecentOrder).not.toHaveBeenCalled();
-
-    rerender(
-      <HomeDashboardScreen
-        {...createProps({
-          onOpenRecentOrder: vi.fn().mockRejectedValue(new Error("order rejected")),
-        })}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: copy.openRecentOrder }));
-
-    expect(await screen.findByText(copy.recentOrderError)).toBeVisible();
-  });
-});
-
-describe("HomeDashboardScreen environmental feature flag", () => {
-  it("hides environmental content by default", () => {
-    renderScreen();
-
-    expect(screen.queryByText(copy.environmentTitle)).not.toBeInTheDocument();
-    expect(screen.queryByText(defaultReport.environment!.uvLabel!)).not.toBeInTheDocument();
-  });
-
-  it("stays hidden when the flag is false even if payload is supplied", () => {
-    renderScreen({ showEnvironmentalModule: false });
-
-    expect(screen.queryByText(defaultReport.environment!.aqiLabel!)).not.toBeInTheDocument();
-  });
-
-  it("renders host UV and AQI labels unchanged when the flag is true", () => {
-    renderScreen({ showEnvironmentalModule: true });
-
-    expect(screen.getByText(defaultReport.environment!.uvLabel!)).toBeVisible();
-    expect(screen.getByText(defaultReport.environment!.aqiLabel!)).toBeVisible();
-    expect(screen.getByText(defaultReport.environment!.guidanceLabel!)).toBeVisible();
-  });
-
-  it("renders readable environmental unavailable status without blocking Start scan", () => {
-    const onStartAnalysis = vi.fn();
-
-    renderScreen({
-      onStartAnalysis,
-      report: {
-        ...defaultReport,
-        environment: {},
-      },
       showEnvironmentalModule: true,
     });
 
-    expect(screen.getByText(copy.environmentUnavailable).closest('[role="status"]')).toBeVisible();
-
-    fireEvent.click(screen.getByRole("button", { name: copy.startAnalysis }));
-
-    expect(onStartAnalysis).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("home-attention-card")).toHaveTextContent(
+      copy.environmentTitle,
+    );
+    expect(
+      screen.getByText(defaultReport.environment!.uvLabel!),
+    ).toBeVisible();
   });
 
   it.each([
-    [{}],
-    [{ guidanceLabel: "Host guidance only" }],
-    [{ updatedAtLabel: "Updated recently" }],
-    [
-      {
-        guidanceLabel: "Host guidance only",
-        updatedAtLabel: "Updated recently",
-      },
-    ],
-    [
-      {
-        uvLabel: "   ",
-        aqiLabel: "   ",
-        guidanceLabel: "Host guidance only",
-      },
-    ],
+    {},
+    { guidanceLabel: "Host guidance only" },
+    { updatedAtLabel: "Updated recently" },
+    {
+      guidanceLabel: "Host guidance only",
+      updatedAtLabel: "Updated recently",
+    },
+    {
+      uvLabel: "   ",
+      aqiLabel: "   ",
+      guidanceLabel: "Host guidance only",
+    },
   ])(
-    "renders environmental unavailable status when measurements are missing for payload %#",
+    "omits attention region for environment payload without usable values %#",
     (environment) => {
       renderScreen({
         report: {
           ...defaultReport,
           environment,
+          recentOrder: undefined,
         },
         showEnvironmentalModule: true,
       });
 
-      expect(screen.getByText(copy.environmentUnavailable).closest('[role="status"]')).toBeVisible();
-      expect(screen.queryByText("Host guidance only")).not.toBeInTheDocument();
-      expect(screen.queryByText("Updated recently")).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("home-attention-card"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Host guidance only"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Updated recently"),
+      ).not.toBeInTheDocument();
     },
   );
 
-  it("treats a UV label alone as available environmental data", () => {
+  it("keeps order card readable but disables details when order ID is blank", () => {
+    const onOpenRecentOrder = vi.fn();
+
+    renderScreen({
+      onOpenRecentOrder,
+      report: {
+        ...defaultReport,
+        recentOrder: {
+          ...defaultReport.recentOrder!,
+          orderId: " ",
+        },
+      },
+    });
+
+    expect(
+      screen.getByText(defaultReport.recentOrder!.orderReferenceLabel),
+    ).toBeVisible();
+    const button = screen.getByRole("button", {
+      name: copy.recentOrderBlocked,
+    });
+    expect(button).toBeDisabled();
+    button.removeAttribute("disabled");
+    fireEvent.click(button);
+    expect(onOpenRecentOrder).not.toHaveBeenCalled();
+  });
+
+  it("uses neutral active-order fallbacks and omits malformed optional supporting copy without blocking order route access", () => {
+    renderScreen({
+      report: {
+        ...defaultReport,
+        recentOrder: {
+          ...defaultReport.recentOrder!,
+          orderReferenceLabel: {} as unknown as string,
+          statusLabel: [] as unknown as string,
+          supporting: 42 as unknown as string,
+        },
+      },
+    });
+
+    const card = screen.getByTestId("home-attention-card");
+
+    expect(
+      screen.getByText(copy.recentOrderReferenceFallback),
+    ).toBeVisible();
+    expect(
+      screen.getByText(copy.recentOrderStatusFallback),
+    ).toBeVisible();
+    expect(card.textContent).not.toContain("42");
+    expect(card.textContent).not.toContain("[object Object]");
+    expect(
+      screen.getByRole("button", {
+        name: copy.openRecentOrder,
+      }),
+    ).not.toBeDisabled();
+  });
+
+  it("opens order details only through the matching callback", () => {
+    const onOpenRecentOrder = vi.fn();
+    const onOpenLatestReport = vi.fn();
+
+    renderScreen({ onOpenLatestReport, onOpenRecentOrder });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: copy.openRecentOrder,
+      }),
+    );
+
+    expect(onOpenRecentOrder).toHaveBeenCalledWith(
+      defaultReport.recentOrder!.orderId,
+    );
+    expect(onOpenLatestReport).not.toHaveBeenCalled();
+  });
+
+  it("keeps environmental card readable while omitting malformed optional metadata", () => {
     renderScreen({
       report: {
         ...defaultReport,
         environment: {
-          uvLabel: "UV supplied by host: 4",
+          uvLabel: "  UV supplied by host: 5  ",
+          guidanceLabel: {} as unknown as string,
+          updatedAtLabel: "   ",
         },
+        recentOrder: undefined,
       },
       showEnvironmentalModule: true,
     });
 
-    expect(screen.getByText("UV supplied by host: 4")).toBeVisible();
-    expect(screen.queryByText(copy.environmentUnavailable)).not.toBeInTheDocument();
-  });
+    const card = screen.getByTestId("home-attention-card");
 
-  it("treats an AQI label alone as available environmental data", () => {
-    renderScreen({
-      report: {
-        ...defaultReport,
-        environment: {
-          aqiLabel: "AQI supplied by host: 42",
-        },
-      },
-      showEnvironmentalModule: true,
-    });
-
-    expect(screen.getByText("AQI supplied by host: 42")).toBeVisible();
-    expect(screen.queryByText(copy.environmentUnavailable)).not.toBeInTheDocument();
-  });
-
-  it("does not request environmental data from browser APIs", () => {
-    const originalGeolocation = Object.getOwnPropertyDescriptor(navigator, "geolocation");
-    const geolocation = { getCurrentPosition: vi.fn(), watchPosition: vi.fn() };
-    Object.defineProperty(navigator, "geolocation", {
-      configurable: true,
-      value: geolocation,
-    });
-    const fetchSpy = vi.fn();
-    const originalFetch = Object.getOwnPropertyDescriptor(globalThis, "fetch");
-    Object.defineProperty(globalThis, "fetch", {
-      configurable: true,
-      value: fetchSpy,
-    });
-
-    try {
-      renderScreen({ showEnvironmentalModule: true });
-
-      expect(geolocation.getCurrentPosition).not.toHaveBeenCalled();
-      expect(geolocation.watchPosition).not.toHaveBeenCalled();
-      expect(fetchSpy).not.toHaveBeenCalled();
-    } finally {
-      if (originalGeolocation) {
-        Object.defineProperty(navigator, "geolocation", originalGeolocation);
-      } else {
-        Reflect.deleteProperty(navigator, "geolocation");
-      }
-
-      if (originalFetch) {
-        Object.defineProperty(globalThis, "fetch", originalFetch);
-      } else {
-        Reflect.deleteProperty(globalThis, "fetch");
-      }
-    }
+    expect(screen.getByText("UV supplied by host: 5")).toBeVisible();
+    expect(within(card).queryByText("Guidance")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Updated")).not.toBeInTheDocument();
+    expect(card.textContent).not.toContain("[object Object]");
   });
 });
 
-describe("HomeDashboardScreen async safety and architecture boundaries", () => {
-  it("keeps offline status informational while content remains visible", () => {
-    renderScreen({ isOffline: true });
-
-    const status = screen.getByRole("status", { name: "" });
-    expect(status).toHaveTextContent(copy.offline);
-    expect(screen.getByText(defaultReport.latestSnapshot!.categoryLabel)).toBeVisible();
-    expect(screen.getByText(defaultReport.routine!.title)).toBeVisible();
-    expect(screen.getByText(defaultReport.recentOrder!.orderReferenceLabel)).toBeVisible();
-  });
-
-  it("keeps StrictMode pending behaviour stable", async () => {
-    const deferred = createDeferred<void>();
-    const onStartAnalysis = vi.fn(() => deferred.promise);
-
-    render(
-      <StrictMode>
-        <HomeDashboardScreen {...createProps({ onStartAnalysis })} />
-      </StrictMode>,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: copy.startAnalysis }));
-
-    expect(onStartAnalysis).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: copy.startingAnalysis })).toBeDisabled();
-
-    deferred.resolve(undefined);
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: copy.startAnalysis })).toBeEnabled();
+describe("HomeDashboardScreen Loading, Empty, Error, and Offline", () => {
+  it("renders calm polite Loading status without route actions or nav", () => {
+    const { container, props } = renderScreen({
+      report: null,
+      state: "loading",
     });
+
+    const status = screen
+      .getByText(copy.loadingHeading)
+      .closest('[role="status"]') as HTMLElement | null;
+    expect(status).not.toBeNull();
+    if (!status) {
+      throw new Error("Loading status region missing");
+    }
+    expect(status).toHaveAttribute("aria-live", "polite");
+    expect(status).toHaveTextContent(copy.loadingHeading);
+    expect(status).toHaveTextContent(copy.loadingSupporting);
+    expect(within(status).queryByRole("button")).not.toBeInTheDocument();
+    expect(container.querySelector("nav")).toBeNull();
+    expectNoRouteCallbacksCalled(props);
   });
 
-  it("keeps StrictMode toast recovery stable", async () => {
-    render(
-      <StrictMode>
-        <HomeDashboardScreen
-          {...createProps({
-            onOpenStore: vi.fn().mockRejectedValue(new Error("strict rejection")),
-          })}
-        />
-      </StrictMode>,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: copy.openStore }));
-
-    expect(await screen.findByText(copy.storeError)).toBeVisible();
-  });
-
-  it("auto-dismisses callback rejection toast", async () => {
-    vi.useFakeTimers();
+  it("renders Error alert with guarded Retry outside alert", async () => {
+    const pending = createDeferred();
+    const onRetryLoad = vi.fn(() => pending.promise);
 
     renderScreen({
-      onOpenStore: vi.fn().mockRejectedValue(new Error("store rejected")),
+      onRetryLoad,
+      report: null,
+      state: "error",
     });
 
-    fireEvent.click(screen.getByRole("button", { name: copy.openStore }));
+    const alert = screen.getByRole("alert");
+    const retry = screen.getByRole("button", {
+      name: copy.retryLoad,
+    });
+
+    expect(alert).toHaveTextContent(copy.errorHeading);
+    expect(alert).not.toContainElement(retry);
+
+    fireEvent.click(retry);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: copy.retryingLoad,
+      }),
+    );
+    expect(onRetryLoad).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      pending.resolve();
+      await pending.promise;
     });
 
-    expect(screen.getByText(copy.storeError)).toBeVisible();
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", {
+          name: copy.retryLoad,
+        }),
+      ).not.toBeDisabled();
+    });
+  });
+
+  it("renders offline banner with cards readable and host-permitted offline actions enabled", () => {
+    renderScreen({
+      isOffline: true,
+      isProgressAvailableOffline: true,
+      isStartAnalysisAvailableOffline: true,
+    });
+
+    expect(
+      screen.getByText(copy.offline).closest('[role="status"]'),
+    ).toBeVisible();
+    expect(screen.getByText(defaultReport.routine!.title)).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: copy.startAnalysis,
+      }),
+    ).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", {
+        name: copy.openProgress,
+      }),
+    ).not.toBeDisabled();
+  });
+});
+
+describe("HomeDashboardScreen pending and rejection behavior", () => {
+  it("disables all visible actions during representative pending operation", async () => {
+    const pending = createDeferred();
+
+    renderScreen({
+      onOpenProgress: vi.fn(() => pending.promise),
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: copy.openProgress,
+      }),
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: copy.openingProgress,
+      }),
+    ).toBeDisabled();
+
+    for (const button of screen.getAllByRole("button")) {
+      expect(button).toBeDisabled();
+    }
+
+    await act(async () => {
+      pending.resolve();
+      await pending.promise;
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", {
+          name: copy.openProgress,
+        }),
+      ).not.toBeDisabled();
+    });
+  });
+
+  it("shows rejection toast, does not steal focus, and auto-dismisses", async () => {
+    vi.useFakeTimers();
+    renderScreen({
+      onOpenRoutine: vi
+        .fn()
+        .mockRejectedValue(new Error("no")),
+    });
+
+    const button = screen.getByRole("button", {
+      name: copy.openRoutine,
+    });
+    button.focus();
+
+    fireEvent.click(button);
+    await flushRejectedCallback();
+
+    expect(screen.getByTestId("home-dashboard-toast")).toHaveTextContent(
+      copy.routineError,
+    );
+    expect(document.activeElement).toBe(button);
 
     act(() => {
       vi.advanceTimersByTime(5000);
     });
 
-    expect(screen.queryByText(copy.storeError)).not.toBeInTheDocument();
+    expect(screen.getByTestId("home-dashboard-toast")).toHaveTextContent(
+      "",
+    );
   });
 
-  it("does not call fetch, storage, IndexedDB, camera, or geolocation APIs", () => {
-    const fetchSpy = vi.fn();
-    const originalFetch = Object.getOwnPropertyDescriptor(globalThis, "fetch");
-    Object.defineProperty(globalThis, "fetch", {
-      configurable: true,
-      value: fetchSpy,
+  it("cleans up toast timer on unmount", async () => {
+    vi.useFakeTimers();
+    const { unmount } = renderScreen({
+      onOpenRoutine: vi
+        .fn()
+        .mockRejectedValue(new Error("no")),
     });
 
-    const localStorageSpy = vi.spyOn(Storage.prototype, "setItem");
-    const indexedDbOpen = vi.fn();
-    const originalIndexedDb = Object.getOwnPropertyDescriptor(window, "indexedDB");
-    Object.defineProperty(window, "indexedDB", {
-      configurable: true,
-      value: { open: indexedDbOpen },
-    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: copy.openRoutine,
+      }),
+    );
+    await flushRejectedCallback();
 
-    const getUserMedia = vi.fn();
-    const originalMediaDevices = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
-    Object.defineProperty(navigator, "mediaDevices", {
-      configurable: true,
-      value: { getUserMedia },
-    });
+    expect(screen.getByTestId("home-dashboard-toast")).toHaveTextContent(
+      copy.routineError,
+    );
 
-    const geolocation = { getCurrentPosition: vi.fn(), watchPosition: vi.fn() };
-    const originalGeolocation = Object.getOwnPropertyDescriptor(navigator, "geolocation");
-    Object.defineProperty(navigator, "geolocation", {
-      configurable: true,
-      value: geolocation,
-    });
+    unmount();
 
-    try {
-      renderScreen({ showEnvironmentalModule: true });
-
-      expect(fetchSpy).not.toHaveBeenCalled();
-      expect(localStorageSpy).not.toHaveBeenCalled();
-      expect(indexedDbOpen).not.toHaveBeenCalled();
-      expect(getUserMedia).not.toHaveBeenCalled();
-      expect(geolocation.getCurrentPosition).not.toHaveBeenCalled();
-      expect(geolocation.watchPosition).not.toHaveBeenCalled();
-    } finally {
-      if (originalFetch) {
-        Object.defineProperty(globalThis, "fetch", originalFetch);
-      } else {
-        Reflect.deleteProperty(globalThis, "fetch");
-      }
-
-      if (originalIndexedDb) {
-        Object.defineProperty(window, "indexedDB", originalIndexedDb);
-      } else {
-        Reflect.deleteProperty(window, "indexedDB");
-      }
-
-      if (originalMediaDevices) {
-        Object.defineProperty(navigator, "mediaDevices", originalMediaDevices);
-      } else {
-        Reflect.deleteProperty(navigator, "mediaDevices");
-      }
-
-      if (originalGeolocation) {
-        Object.defineProperty(navigator, "geolocation", originalGeolocation);
-      } else {
-        Reflect.deleteProperty(navigator, "geolocation");
-      }
-    }
+    expect(() => {
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+    }).not.toThrow();
   });
 
-  it("does not render anchors, iframes, file inputs, or bottom navigation", () => {
+  it("restarts dismissal window for identical replacement toast", async () => {
+    vi.useFakeTimers();
+    const onOpenRoutine = vi.fn(() => {
+      throw new Error("no");
+    });
+
+    renderScreen({ onOpenRoutine });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: copy.openRoutine,
+        }),
+      );
+    });
+
+    expect(screen.getByTestId("home-dashboard-toast")).toHaveTextContent(
+      copy.routineError,
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(4500);
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: copy.openRoutine,
+        }),
+      );
+    });
+
+    expect(onOpenRoutine).toHaveBeenCalledTimes(2);
+    expect(screen.getAllByText(copy.routineError)).toHaveLength(1);
+
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+
+    expect(screen.getByTestId("home-dashboard-toast")).toHaveTextContent(
+      copy.routineError,
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(4400);
+    });
+
+    expect(screen.getByTestId("home-dashboard-toast")).toHaveTextContent(
+      "",
+    );
+  });
+});
+
+describe("HomeDashboardScreen StrictMode behavior", () => {
+  it("does not call callbacks during StrictMode mount or rerender", () => {
+    const props = createProps();
+    const { rerender } = render(
+      <StrictMode>
+        <HomeDashboardScreen {...props} />
+      </StrictMode>,
+    );
+
+    expectNoRouteCallbacksCalled(props);
+
+    rerender(
+      <StrictMode>
+        <HomeDashboardScreen {...props} isOffline />
+      </StrictMode>,
+    );
+
+    expectNoRouteCallbacksCalled(props);
+  });
+
+  it("keeps duplicate guard effective under StrictMode", async () => {
+    const pending = createDeferred();
+    const onStartAnalysis = vi.fn(() => pending.promise);
+
+    render(
+      <StrictMode>
+        <HomeDashboardScreen
+          {...createProps({ onStartAnalysis })}
+        />
+      </StrictMode>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: copy.startAnalysis,
+      }),
+    );
+    const pendingButton = screen.getByRole("button", {
+      name: copy.startingAnalysis,
+    });
+    pendingButton.removeAttribute("disabled");
+    fireEvent.click(pendingButton);
+
+    expect(onStartAnalysis).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      pending.resolve();
+      await pending.promise;
+    });
+  });
+
+  it("renders one toast after StrictMode rejection", async () => {
+    render(
+      <StrictMode>
+        <HomeDashboardScreen
+          {...createProps({
+            onOpenProgress: vi
+              .fn()
+              .mockRejectedValue(new Error("no")),
+          })}
+        />
+      </StrictMode>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: copy.openProgress,
+      }),
+    );
+    await flushRejectedCallback();
+
+    expect(screen.getAllByText(copy.progressError)).toHaveLength(1);
+  });
+
+  it("does not update state after unmount during pending callback", async () => {
+    const pending = createDeferred();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const { unmount } = render(
+      <StrictMode>
+        <HomeDashboardScreen
+          {...createProps({
+            onOpenProgress: vi.fn(() => pending.promise),
+          })}
+        />
+      </StrictMode>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: copy.openProgress,
+      }),
+    );
+    unmount();
+
+    await act(async () => {
+      pending.resolve();
+      await pending.promise;
+    });
+
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+});
+
+describe("HomeDashboardScreen visual and architecture contract", () => {
+  it("uses warm palette, mobile spacing, dominant primary CTA, rounded cards, focus rings, and no bar markup", () => {
     const { container } = renderScreen();
+    const main = screen.getByTestId("home-dashboard-main");
+    const startButton = screen.getByRole("button", {
+      name: copy.startAnalysis,
+    });
 
-    expect(container.querySelector("a")).not.toBeInTheDocument();
-    expect(container.querySelector("iframe")).not.toBeInTheDocument();
-    expect(container.querySelector('input[type="file"]')).not.toBeInTheDocument();
-    expect(container.querySelector("nav")).not.toBeInTheDocument();
+    expect(main).toHaveStyle({
+      "--dl-page": "#FAF7F2",
+      "--dl-peach": "#E8A98A",
+      "--dl-blush": "#F2D9CC",
+      "--dl-sand": "#C9B8A4",
+      "--dl-bark": "#5C4A42",
+    });
+    expect(main.className).toContain("px-4");
+    expect(startButton.className).toContain("min-h-[64px]");
+    expect(startButton.className).toContain(
+      "focus-visible:outline",
+    );
+    expect(startButton.className).toContain(
+      "motion-reduce:transition-none",
+    );
+    expect(screen.getByTestId("home-start-card").className).toContain(
+      "rounded-[24px]",
+    );
+    expect(container.querySelector("nav")).toBeNull();
   });
 
-  it("does not render account, commercial-pressure, clinical, or off-palette wording", () => {
-    const { container } = renderScreen();
-    const html = container.innerHTML;
+  it("does not render anchors, iframes, file inputs, or opaque IDs", () => {
+    const { container } = renderScreen({
+      showEnvironmentalModule: true,
+    });
 
-    expect(html).not.toMatch(/create account|required sign-in|affiliate|marketplace|external seller|sponsored|diagnosis/i);
-    expect(html).not.toMatch(/sage|green|blue/i);
-  });
-
-  it("never renders opaque IDs in user-visible text", () => {
-    const { container } = renderScreen({ showEnvironmentalModule: true });
-
+    expect(container.querySelector("a")).toBeNull();
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(container.querySelector('input[type="file"]')).toBeNull();
     expectOpaqueIdsNotRendered(container);
+  });
+
+  it("keeps the production source within presentation boundaries", () => {
+    const source = readFileSync(
+      "components/home-dashboard-screen.tsx",
+      "utf8",
+    );
+    const forbidden = [
+      "fetch(",
+      "localStorage",
+      "sessionStorage",
+      "indexedDB",
+      "document.cookie",
+      "navigator.geolocation",
+      "navigator.mediaDevices",
+      "getUserMedia",
+      "FileReader",
+      "window.location",
+      "location.href",
+      "history.",
+      "useRouter",
+      "next/navigation",
+      "react-router",
+      "http://",
+      "https://",
+      'input type="file"',
+      "accept=",
+      "capture=",
+      "iframe",
+      "AppBottomNavigation",
+      "ScanActionsSheet",
+      "MoreHubScreen",
+      "ReturningUserNavigationShell",
+      "analytics",
+      "affiliate",
+      "marketplace",
+      "external seller",
+      "sponsored",
+    ];
+
+    for (const pattern of forbidden) {
+      expect(source).not.toContain(pattern);
+    }
+
+    expect(source).not.toMatch(/<a(?:\s|>)/i);
+    expect(source).not.toMatch(/<nav(?:\s|>)/i);
+    expect(source).not.toMatch(/\bsage\b/i);
+    expect(source).not.toMatch(/\bgreen\b/i);
+    expect(source).not.toMatch(/\bblue\b/i);
+    expect(source).not.toMatch(/\bcamera\b/i);
+    expect(source).not.toMatch(/\bpicker\b/i);
+    expect(source).not.toMatch(/\bcalculate\b/i);
+    expect(source).toContain("window.setTimeout");
+    expect(source).toContain("window.clearTimeout");
+    expect(source).toMatch(/onStartAnalysis|canStartAnalysis|start-analysis/);
   });
 });

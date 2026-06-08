@@ -1,6 +1,7 @@
 import {
   type CSSProperties,
   type ReactNode,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -87,15 +88,20 @@ export interface HomeDashboardScreenProps {
   isOffline?: boolean;
   showEnvironmentalModule?: boolean;
   canStartAnalysis?: boolean;
+  isStartAnalysisAvailableOffline?: boolean;
   canChangeProfile?: boolean;
   canOpenLatestReport?: boolean;
+  isLatestReportAvailableOffline?: boolean;
   canOpenRoutine?: boolean;
+  isRoutineAvailableOffline?: boolean;
   canOpenGuestScanner?: boolean;
   isGuestScannerAvailableOffline?: boolean;
   canOpenProgress?: boolean;
+  isProgressAvailableOffline?: boolean;
   canOpenOrders?: boolean;
   canOpenStore?: boolean;
   canOpenRecentOrder?: boolean;
+  isRecentOrderAvailableOffline?: boolean;
   onStartAnalysis: (
     profileId: string,
   ) => void | Promise<void>;
@@ -116,96 +122,101 @@ export interface HomeDashboardScreenProps {
   onRetryLoad?: () => void | Promise<void>;
 }
 
-export function isHomeDashboardState(
-  value: unknown,
-): value is HomeDashboardState {
-  return (
-    value === "loading" ||
-    value === "ready" ||
-    value === "empty" ||
-    value === "error"
-  );
+interface ToastNotice {
+  message: string;
 }
+
+type ThemeStyle = CSSProperties &
+  Record<`--dl-${string}`, string>;
+
+type VisibleOperation = Exclude<
+  HomeDashboardOperation,
+  | "open-scanner"
+  | "open-orders"
+  | "open-store"
+  | null
+>;
 
 export const copy = {
   wordmark: "DermaLens",
+  homeHeading: "Your skincare home",
+  welcomePrefix: "Welcome back,",
   changeProfile: "Change profile",
   changingProfile: "Changing profile...",
   changeProfileBlocked: "Profile switching unavailable",
+  changeProfileError:
+    "We could not open profile switching. Please try again.",
   loadingHeading: "Preparing your dashboard",
   loadingSupporting: "Your skincare home base is being prepared.",
-  readyHeading: "Good to see you again",
   emptyHeading: "Your dashboard is ready",
   emptySupporting:
-    "Start your first scan to build a skincare snapshot and routine.",
+    "Start your first facial scan to build a skincare snapshot and routine.",
   errorHeading: "We could not load your dashboard",
   errorSupporting:
     "Your locally supplied content is protected. Try loading the dashboard again.",
   retryLoad: "Try again",
   retryingLoad: "Trying again...",
-  retryError: "We could not reload the dashboard. Please try again.",
+  retryError:
+    "We could not reload the dashboard. Please try again.",
   offline:
     "You appear to be offline. Locally supplied dashboard details remain visible.",
   profileContext: "ACTIVE PROFILE",
-  localFirstHelper: "Your profile stays local unless you choose to sync it.",
-  startCardTitle: "Start a new skin scan",
+  localFirstHelper:
+    "Your profile stays local unless you choose to sync it.",
+  profileSyncFallback: "Profile storage status unavailable",
+  startCardTitle: "Start facial scan",
   startCardSupporting:
-    "Take or choose a photo when you want an updated skincare snapshot.",
-  startAnalysis: "Start a new scan",
-  startingAnalysis: "Starting scan...",
-  startBlocked: "Scan unavailable right now",
-  startError: "We could not start a new scan. Please try again.",
-  latestSnapshotTitle: "Latest snapshot",
-  latestSnapshotEmpty: "No skin snapshot yet.",
-  latestSnapshotEmptySupporting:
-    "Start a scan when you are ready to compare visible skincare patterns.",
-  openLatestReport: "View latest report",
-  openingLatestReport: "Opening report...",
-  latestReportBlocked: "Report unavailable right now",
-  latestReportError: "We could not open the latest report. Please try again.",
-  snapshotImageAlt: "Latest skincare snapshot",
-  snapshotImagePlaceholder: "Snapshot image unavailable",
-  routineTitle: "Active routine",
-  routineEmpty: "No active routine yet.",
+    "Capture a fresh image to review visible skin concerns and update your routine guidance.",
+  startAnalysis: "Start facial scan",
+  startingAnalysis: "Starting facial scan...",
+  startBlocked: "Facial scan unavailable",
+  startOfflineBlocked: "Reconnect to start facial scan",
+  startError:
+    "We could not start a facial scan. Please try again.",
+  routineTitle: "Today's routine",
+  routineTitleFallback: "Routine summary unavailable",
+  routineSupportingFallback: "Routine details unavailable",
+  routineEmpty: "No routine available yet.",
   routineEmptySupporting:
-    "Your routine will appear here after a report is ready.",
+    "Your host-supplied routine will appear here after guidance is ready.",
   openRoutine: "Open routine",
   openingRoutine: "Opening routine...",
-  routineBlocked: "Routine unavailable right now",
+  routineBlocked: "Routine unavailable",
+  routineOfflineBlocked: "Reconnect to open routine",
   routineError: "We could not open your routine. Please try again.",
-  quickActionsTitle: "Quick actions",
-  scannerTitle: "Ingredient scanner",
-  scannerSupporting: "Check a product ingredient list.",
-  openScanner: "Open scanner",
-  openingScanner: "Opening scanner...",
-  scannerBlocked: "Scan unavailable right now",
-  scannerOfflineBlocked: "Reconnect to scan ingredients",
-  scannerError: "We could not open ingredient scanning. Please try again.",
-  progressTitle: "Progress",
-  progressSupporting: "Review host-supplied scan history.",
-  openProgress: "Open progress",
+  skinJourneyTitle: "Skin journey",
+  latestSnapshotEmpty: "No skin snapshot yet.",
+  latestSnapshotEmptySupporting:
+    "Start a facial scan when you are ready to review visible skin changes.",
+  openLatestReport: "Open latest report",
+  openingLatestReport: "Opening latest report...",
+  latestReportBlocked: "Latest report unavailable",
+  latestReportOfflineBlocked:
+    "Reconnect to open latest report",
+  latestReportError:
+    "We could not open the latest report. Please try again.",
+  snapshotImageAlt: "Latest skincare snapshot",
+  snapshotCapturedFallback: "Capture time unavailable",
+  snapshotCategoryFallback: "Latest summary unavailable",
+  snapshotImagePlaceholder: "Snapshot image unavailable",
+  openProgress: "View progress",
   openingProgress: "Opening progress...",
-  progressBlocked: "Progress unavailable right now",
+  progressBlocked: "Progress unavailable",
+  progressOfflineBlocked: "Reconnect to view progress",
   progressError: "We could not open progress. Please try again.",
-  ordersTitle: "Orders",
-  ordersSupporting: "Check first-party order activity.",
-  openOrders: "Open orders",
-  openingOrders: "Opening orders...",
-  ordersBlocked: "Orders unavailable right now",
-  ordersError: "We could not open orders. Please try again.",
-  storeTitle: "Store",
-  storeSupporting: "Browse DermaLens products.",
-  openStore: "Open store",
-  openingStore: "Opening store...",
-  storeBlocked: "Store unavailable right now",
-  storeError: "We could not open the store. Please try again.",
-  recentOrderTitle: "Recent order",
+  progressSupporting:
+    "Review host-supplied skincare journey updates.",
+  recentOrderTitle: "Order update",
+  recentOrderReferenceFallback: "Order reference unavailable",
+  recentOrderStatusFallback: "Order status unavailable",
   openRecentOrder: "View order details",
-  openingRecentOrder: "Opening order...",
+  openingRecentOrder: "Opening order details...",
   recentOrderBlocked: "Order details unavailable",
-  recentOrderError: "We could not open order details. Please try again.",
+  recentOrderOfflineBlocked:
+    "Reconnect to view order details",
+  recentOrderError:
+    "We could not open order details. Please try again.",
   environmentTitle: "UV and air quality",
-  environmentUnavailable: "Environment details are unavailable right now.",
   toastNoticeLabel: "Dashboard notice",
 } as const;
 
@@ -237,8 +248,6 @@ const fonts = {
   ui: 'var(--font-dm-sans), system-ui, sans-serif',
   metadata: 'var(--font-space-mono), monospace',
 } as const;
-
-type ThemeStyle = CSSProperties & Record<`--dl-${string}`, string>;
 
 const themeStyle: ThemeStyle = {
   "--dl-page": colors.page,
@@ -272,6 +281,32 @@ function isNonWhitespaceString(
   return (
     typeof value === "string" &&
     value.trim().length > 0
+  );
+}
+
+function getSafeDisplayText(
+  value: unknown,
+  fallback: string,
+) {
+  return isNonWhitespaceString(value)
+    ? value.trim()
+    : fallback;
+}
+
+function getOptionalDisplayText(value: unknown) {
+  return isNonWhitespaceString(value)
+    ? value.trim()
+    : null;
+}
+
+export function isHomeDashboardState(
+  value: unknown,
+): value is HomeDashboardState {
+  return (
+    value === "loading" ||
+    value === "ready" ||
+    value === "empty" ||
+    value === "error"
   );
 }
 
@@ -309,12 +344,16 @@ function hasSnapshotImageUrl(
 }
 
 function getProfileName(report: HomeDashboardReport) {
-  return report.profile.displayName.trim() || "Your profile";
+  return report.profile.displayName.trim();
 }
 
-function getSnapshotImageAlt(snapshot: DashboardLatestSnapshot) {
-  const suppliedAlt = snapshot.imageAlt?.trim();
-  return suppliedAlt ? suppliedAlt : copy.snapshotImageAlt;
+function getSnapshotImageAlt(
+  snapshot: DashboardLatestSnapshot,
+) {
+  return getSafeDisplayText(
+    snapshot.imageAlt,
+    copy.snapshotImageAlt,
+  );
 }
 
 function hasEnvironmentalMeasurements(
@@ -326,16 +365,48 @@ function hasEnvironmentalMeasurements(
   );
 }
 
+function getActionAvailability({
+  canOpen,
+  callback,
+  hasRouteContext = true,
+  isAvailableOffline = false,
+  isOffline,
+}: {
+  canOpen: boolean;
+  callback: unknown;
+  hasRouteContext?: boolean;
+  isAvailableOffline?: boolean;
+  isOffline: boolean;
+}) {
+  const isGenerallyBlocked =
+    canOpen !== true ||
+    typeof callback !== "function" ||
+    hasRouteContext !== true;
+  const isOfflineBlocked =
+    !isGenerallyBlocked &&
+    isOffline &&
+    isAvailableOffline !== true;
+
+  return {
+    isAvailable: !isGenerallyBlocked && !isOfflineBlocked,
+    isGenerallyBlocked,
+    isOfflineBlocked,
+  };
+}
+
 function SectionCard({
   children,
   className = "",
+  testId,
 }: {
   children: ReactNode;
   className?: string;
+  testId?: string;
 }) {
   return (
     <section
       className={`rounded-[24px] border border-[var(--dl-border-subtle)] bg-[var(--dl-surface)] p-5 shadow-[0_18px_60px_rgba(92,74,66,0.08)] ${className}`}
+      data-testid={testId}
     >
       {children}
     </section>
@@ -345,7 +416,7 @@ function SectionCard({
 function Eyebrow({ children }: { children: ReactNode }) {
   return (
     <p
-      className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-[var(--dl-dusk)]"
+      className="text-[0.72rem] font-semibold uppercase text-[var(--dl-dusk)]"
       style={{ fontFamily: fonts.metadata }}
     >
       {children}
@@ -353,68 +424,79 @@ function Eyebrow({ children }: { children: ReactNode }) {
   );
 }
 
-function ActionButton({
-  blocked,
+function DashboardButton({
+  activeOperation,
   blockedLabel,
-  children,
   className = "",
   label,
   minHeight = "min-h-[44px]",
   onClick,
   operation,
   pendingLabel,
-  activeOperation,
+  unavailableLabel,
 }: {
-  blocked?: boolean;
+  activeOperation: HomeDashboardOperation;
   blockedLabel: string;
-  children?: ReactNode;
   className?: string;
   label: string;
   minHeight?: string;
   onClick: () => void;
-  operation: Exclude<HomeDashboardOperation, null>;
+  operation: VisibleOperation;
   pendingLabel: string;
-  activeOperation: HomeDashboardOperation;
+  unavailableLabel: string | null;
 }) {
   const isPending = activeOperation === operation;
-  const hasConflictingOperation = activeOperation !== null && !isPending;
-  const isDisabled = blocked || isPending || hasConflictingOperation;
-  const visibleLabel = isPending ? pendingLabel : blocked ? blockedLabel : label;
+  const hasConflictingOperation =
+    activeOperation !== null && !isPending;
+  const isUnavailable = unavailableLabel !== null;
+  const isDisabled =
+    isUnavailable || isPending || hasConflictingOperation;
+  const visibleLabel = isPending
+    ? pendingLabel
+    : isUnavailable
+      ? unavailableLabel
+      : label;
 
   return (
     <button
-      className={`${focusRing} ${minHeight} rounded-full px-4 py-2 text-sm font-bold motion-safe:transition disabled:cursor-not-allowed disabled:opacity-70 ${className}`}
+      className={`${focusRing} ${minHeight} rounded-full px-4 py-2 text-sm font-bold motion-safe:transition motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-70 ${className}`}
       disabled={isDisabled}
-      onClick={onClick}
+      onClick={() => {
+        if (isDisabled) {
+          return;
+        }
+
+        onClick();
+      }}
       type="button"
     >
-      {children ? (
-        <span className="flex items-center justify-center gap-2">
-          {children}
-          <span>{visibleLabel}</span>
-        </span>
-      ) : (
-        visibleLabel
-      )}
+      {visibleLabel}
     </button>
   );
 }
 
-function SecondaryButton(props: Omit<Parameters<typeof ActionButton>[0], "className">) {
+function SecondaryButton(
+  props: Omit<Parameters<typeof DashboardButton>[0], "className">,
+) {
   return (
-    <ActionButton
+    <DashboardButton
       {...props}
       className="border border-[var(--dl-border-subtle)] bg-[var(--dl-surface)] text-[var(--dl-bark)] hover:bg-[var(--dl-surface-soft)]"
     />
   );
 }
 
-function PrimaryButton(props: Omit<Parameters<typeof ActionButton>[0], "className" | "minHeight">) {
+function PrimaryButton(
+  props: Omit<
+    Parameters<typeof DashboardButton>[0],
+    "className" | "minHeight"
+  >,
+) {
   return (
-    <ActionButton
+    <DashboardButton
       {...props}
       className="bg-[var(--dl-bark)] text-white shadow-[0_12px_32px_rgba(92,74,66,0.2)] hover:bg-[var(--dl-bark-hover)]"
-      minHeight="min-h-[52px]"
+      minHeight="min-h-[64px]"
     />
   );
 }
@@ -427,143 +509,151 @@ function Placeholder({ label }: { label: string }) {
   );
 }
 
+function ToastRegion({
+  notice,
+}: {
+  notice: string | null;
+}) {
+  return (
+    <div
+      aria-atomic="true"
+      aria-label={copy.toastNoticeLabel}
+      aria-live="polite"
+      className="min-h-[44px]"
+      data-testid="home-dashboard-toast"
+      role="status"
+    >
+      {notice ? (
+        <div className="rounded-[18px] border border-[var(--dl-border-subtle)] bg-[var(--dl-bark)] px-4 py-3 text-sm font-semibold text-white shadow-[0_16px_44px_rgba(58,46,40,0.22)] motion-reduce:transition-none">
+          {notice}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function HomeDashboardScreen({
   state = "ready",
   report = null,
   isOffline = false,
   showEnvironmentalModule = false,
   canStartAnalysis = true,
+  isStartAnalysisAvailableOffline = false,
   canChangeProfile = true,
   canOpenLatestReport = true,
+  isLatestReportAvailableOffline = false,
   canOpenRoutine = true,
-  canOpenGuestScanner = true,
-  isGuestScannerAvailableOffline = true,
+  isRoutineAvailableOffline = false,
   canOpenProgress = true,
-  canOpenOrders = true,
-  canOpenStore = true,
+  isProgressAvailableOffline = false,
   canOpenRecentOrder = true,
+  isRecentOrderAvailableOffline = false,
   onStartAnalysis,
   onChangeProfile,
   onOpenLatestReport,
   onOpenRoutine,
-  onOpenGuestScanner,
   onOpenProgress,
-  onOpenOrders,
-  onOpenStore,
   onOpenRecentOrder,
   onRetryLoad,
 }: HomeDashboardScreenProps) {
-  const mountedRef = useRef(false);
+  const mountedRef = useRef(true);
   const inFlightRef = useRef<HomeDashboardOperation>(null);
-  const toastTimeoutRef = useRef<number | null>(null);
-
   const [activeOperation, setActiveOperation] =
     useState<HomeDashboardOperation>(null);
-  const [toastNotice, setToastNotice] = useState<string | null>(null);
-  const [failedImageKey, setFailedImageKey] = useState<string | null>(null);
+  const [toastNotice, setToastNotice] =
+    useState<ToastNotice | null>(null);
+  const [failedImageKey, setFailedImageKey] =
+    useState<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
 
     return () => {
       mountedRef.current = false;
-
-      if (toastTimeoutRef.current !== null) {
-        window.clearTimeout(toastTimeoutRef.current);
-      }
     };
   }, []);
 
-  const showToast = (notice: string) => {
-    if (!mountedRef.current) {
+  useEffect(() => {
+    if (!toastNotice) {
       return;
     }
 
-    if (toastTimeoutRef.current !== null) {
-      window.clearTimeout(toastTimeoutRef.current);
-    }
-
-    setToastNotice(notice);
-    toastTimeoutRef.current = window.setTimeout(() => {
+    const timeout = window.setTimeout(() => {
       if (mountedRef.current) {
         setToastNotice(null);
       }
     }, 5000);
-  };
 
-  const runOperation = async (
-    operation: Exclude<HomeDashboardOperation, null>,
-    callback: () => void | Promise<void>,
-    errorNotice: string,
-  ) => {
-    if (inFlightRef.current !== null) {
-      return;
-    }
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [toastNotice]);
 
-    inFlightRef.current = operation;
-    setActiveOperation(operation);
-
-    try {
-      await callback();
-    } catch {
-      showToast(errorNotice);
-    } finally {
-      if (mountedRef.current) {
-        inFlightRef.current = null;
-        setActiveOperation(null);
+  const runOperation = useCallback(
+    async (
+      operation: Exclude<HomeDashboardOperation, null>,
+      callback: () => void | Promise<void>,
+      errorNotice: string,
+    ) => {
+      if (inFlightRef.current !== null) {
+        return;
       }
-    }
-  };
 
-  const resolvedState = isHomeDashboardState(state) ? state : "error";
-  const hasUsableReport = hasUsableHomeDashboardReport(report);
+      inFlightRef.current = operation;
+
+      if (mountedRef.current) {
+        setActiveOperation(operation);
+        setToastNotice(null);
+      }
+
+      try {
+        await callback();
+      } catch {
+        if (mountedRef.current) {
+          setToastNotice({
+            message: errorNotice,
+          });
+        }
+      } finally {
+        inFlightRef.current = null;
+
+        if (mountedRef.current) {
+          setActiveOperation(null);
+        }
+      }
+    },
+    [],
+  );
+
+  const resolvedState = isHomeDashboardState(state)
+    ? state
+    : "error";
+  const hasUsableReport =
+    hasUsableHomeDashboardReport(report);
   const shouldShowError =
     resolvedState === "error" ||
-    ((resolvedState === "ready" || resolvedState === "empty") && !hasUsableReport);
+    ((resolvedState === "ready" ||
+      resolvedState === "empty") &&
+      !hasUsableReport);
 
   const shell = (children: ReactNode) => (
     <main
       className="min-h-screen bg-[var(--dl-page)] px-4 py-5 text-[var(--dl-text-primary)] sm:px-6 lg:px-8"
+      data-testid="home-dashboard-main"
       style={{ ...themeStyle, fontFamily: fonts.ui }}
     >
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
-        <header className="flex min-h-[44px] items-center justify-between gap-4">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
+        <header className="min-h-[44px]">
           <div
             className="text-xl text-[var(--dl-bark)]"
             style={{ fontFamily: fonts.display }}
           >
             {copy.wordmark}
           </div>
-          {hasUsableReport ? (
-            <SecondaryButton
-              activeOperation={activeOperation}
-              blocked={!canChangeProfile}
-              blockedLabel={copy.changeProfileBlocked}
-              label={copy.changeProfile}
-              onClick={() =>
-                runOperation(
-                  "change-profile",
-                  onChangeProfile,
-                  copy.changeProfileBlocked,
-                )
-              }
-              operation="change-profile"
-              pendingLabel={copy.changingProfile}
-            />
-          ) : null}
         </header>
         {children}
+        <ToastRegion notice={toastNotice?.message ?? null} />
       </div>
-      {toastNotice ? (
-        <div
-          aria-label={copy.toastNoticeLabel}
-          aria-live="polite"
-          className="fixed inset-x-4 bottom-4 z-10 mx-auto max-w-md rounded-[18px] border border-[var(--dl-border-subtle)] bg-[var(--dl-bark)] px-4 py-3 text-sm font-semibold text-white shadow-[0_16px_44px_rgba(58,46,40,0.22)]"
-          role="status"
-        >
-          {toastNotice}
-        </div>
-      ) : null}
     </main>
   );
 
@@ -605,18 +695,29 @@ export default function HomeDashboardScreen({
             {copy.errorSupporting}
           </p>
         </section>
-        {onRetryLoad ? (
+        {typeof onRetryLoad === "function" ? (
           <div>
             <SecondaryButton
               activeOperation={activeOperation}
-              blocked={false}
               blockedLabel={copy.retryLoad}
               label={copy.retryLoad}
-              onClick={() =>
-                runOperation("retry-load", onRetryLoad, copy.retryError)
-              }
+              onClick={() => {
+                if (
+                  activeOperation !== null ||
+                  inFlightRef.current !== null
+                ) {
+                  return;
+                }
+
+                void runOperation(
+                  "retry-load",
+                  onRetryLoad,
+                  copy.retryError,
+                );
+              }}
               operation="retry-load"
               pendingLabel={copy.retryingLoad}
+              unavailableLabel={null}
             />
           </div>
         ) : null}
@@ -626,32 +727,201 @@ export default function HomeDashboardScreen({
 
   const safeReport = report as HomeDashboardReport;
   const profileName = getProfileName(safeReport);
-  const snapshot = safeReport.latestSnapshot;
-  const routine = safeReport.routine;
-  const recentOrder = safeReport.recentOrder;
-  const environment = safeReport.environment;
-  const hasUsableSnapshotImage = hasSnapshotImageUrl(snapshot);
-  const canUseLatestReportRoute =
-    canOpenLatestReport &&
-    Boolean(onOpenLatestReport) &&
-    hasUsableLatestSnapshotRoute(snapshot);
-  const canUseRoutineRoute =
-    canOpenRoutine &&
-    Boolean(onOpenRoutine) &&
-    hasUsableRoutineRoute(routine);
-  const canUseRecentOrderRoute =
-    canOpenRecentOrder &&
-    Boolean(onOpenRecentOrder) &&
-    hasUsableRecentOrderRoute(recentOrder);
-  const snapshotImageKey =
-    hasUsableSnapshotImage ? `${snapshot.reportId}::${snapshot.imageUrl}` : null;
+  const profileGreeting = getSafeDisplayText(
+    safeReport.greetingLabel,
+    `${copy.welcomePrefix} ${profileName}`,
+  );
+  const isEmptyState = resolvedState === "empty";
+  const snapshot = isEmptyState
+    ? undefined
+    : safeReport.latestSnapshot;
+  const routine = isEmptyState ? undefined : safeReport.routine;
+  const recentOrder = isEmptyState
+    ? undefined
+    : safeReport.recentOrder;
+  const environment = isEmptyState
+    ? undefined
+    : safeReport.environment;
+  const profileSyncLabel = getSafeDisplayText(
+    safeReport.profile.syncLabel,
+    copy.profileSyncFallback,
+  );
+  const routineTitleLabel = routine
+    ? getSafeDisplayText(
+        routine.title,
+        copy.routineTitleFallback,
+      )
+    : null;
+  const routineSupportingLabel = routine
+    ? getSafeDisplayText(
+        routine.supporting,
+        copy.routineSupportingFallback,
+      )
+    : null;
+  const routineUpdatedLabel = getOptionalDisplayText(
+    routine?.updatedAtLabel,
+  );
+  const routineMorningLabel = getOptionalDisplayText(
+    routine?.morningSummaryLabel,
+  );
+  const routineEveningLabel = getOptionalDisplayText(
+    routine?.eveningSummaryLabel,
+  );
+  const snapshotCapturedLabel = snapshot
+    ? getSafeDisplayText(
+        snapshot.capturedAtLabel,
+        copy.snapshotCapturedFallback,
+      )
+    : null;
+  const snapshotCategoryLabel = snapshot
+    ? getSafeDisplayText(
+        snapshot.categoryLabel,
+        copy.snapshotCategoryFallback,
+      )
+    : null;
+  const snapshotScoreLabel = getOptionalDisplayText(
+    snapshot?.scoreLabel,
+  );
+  const snapshotComparisonLabel = getOptionalDisplayText(
+    snapshot?.comparisonLabel,
+  );
+  const snapshotSaveLabel = getOptionalDisplayText(
+    snapshot?.saveLabel,
+  );
+  const recentOrderReferenceLabel = recentOrder
+    ? getSafeDisplayText(
+        recentOrder.orderReferenceLabel,
+        copy.recentOrderReferenceFallback,
+      )
+    : null;
+  const recentOrderStatusLabel = recentOrder
+    ? getSafeDisplayText(
+        recentOrder.statusLabel,
+        copy.recentOrderStatusFallback,
+      )
+    : null;
+  const recentOrderSupportingLabel = getOptionalDisplayText(
+    recentOrder?.supporting,
+  );
+  const environmentUvLabel = getOptionalDisplayText(
+    environment?.uvLabel,
+  );
+  const environmentAqiLabel = getOptionalDisplayText(
+    environment?.aqiLabel,
+  );
+  const environmentGuidanceLabel = getOptionalDisplayText(
+    environment?.guidanceLabel,
+  );
+  const environmentUpdatedLabel = getOptionalDisplayText(
+    environment?.updatedAtLabel,
+  );
+  const hasUsableSnapshotImage =
+    hasSnapshotImageUrl(snapshot);
+  const snapshotImageKey = hasUsableSnapshotImage
+    ? `${snapshot.reportId}::${snapshot.imageUrl}`
+    : null;
   const snapshotImageFailed =
-    snapshotImageKey !== null && failedImageKey === snapshotImageKey;
-  const scannerBlocked =
-    !canOpenGuestScanner || (isOffline && !isGuestScannerAvailableOffline);
+    snapshotImageKey !== null &&
+    failedImageKey === snapshotImageKey;
+  const canUseLatestReportRoute = getActionAvailability({
+    callback: onOpenLatestReport,
+    canOpen: canOpenLatestReport,
+    hasRouteContext: hasUsableLatestSnapshotRoute(snapshot),
+    isAvailableOffline: isLatestReportAvailableOffline,
+    isOffline,
+  });
+  const canUseRoutineRoute = getActionAvailability({
+    callback: onOpenRoutine,
+    canOpen: canOpenRoutine,
+    hasRouteContext: hasUsableRoutineRoute(routine),
+    isAvailableOffline: isRoutineAvailableOffline,
+    isOffline,
+  });
+  const canUseProgressRoute = getActionAvailability({
+    callback: onOpenProgress,
+    canOpen: canOpenProgress,
+    isAvailableOffline: isProgressAvailableOffline,
+    isOffline,
+  });
+  const canUseRecentOrderRoute = getActionAvailability({
+    callback: onOpenRecentOrder,
+    canOpen: canOpenRecentOrder,
+    hasRouteContext: hasUsableRecentOrderRoute(recentOrder),
+    isAvailableOffline: isRecentOrderAvailableOffline,
+    isOffline,
+  });
+  const canUseStartRoute = getActionAvailability({
+    callback: onStartAnalysis,
+    canOpen: canStartAnalysis,
+    isAvailableOffline: isStartAnalysisAvailableOffline,
+    isOffline,
+  });
+  const canUseProfileRoute = getActionAvailability({
+    callback: onChangeProfile,
+    canOpen: canChangeProfile,
+    isAvailableOffline: true,
+    isOffline,
+  });
+  const shouldShowOrderAttention = Boolean(recentOrder);
+  const shouldShowEnvironmentAttention =
+    !shouldShowOrderAttention &&
+    showEnvironmentalModule === true &&
+    hasEnvironmentalMeasurements(environment);
 
   return shell(
     <>
+      <section
+        className="rounded-[28px] border border-[var(--dl-border-subtle)] bg-[linear-gradient(135deg,var(--dl-surface),var(--dl-blush)_55%,var(--dl-parchment))] p-6"
+        data-testid="home-profile-card"
+      >
+        <Eyebrow>{copy.profileContext}</Eyebrow>
+        <h1
+          className="mt-4 text-4xl leading-tight text-[var(--dl-text-primary)] sm:text-5xl"
+          style={{ fontFamily: fonts.display }}
+        >
+          {copy.homeHeading}
+        </h1>
+        <p className="mt-4 text-xl font-bold text-[var(--dl-bark)]">
+          {profileGreeting}
+        </p>
+        <p className="mt-2 text-sm text-[var(--dl-text-secondary)]">
+          {profileSyncLabel}
+        </p>
+        <p className="mt-3 rounded-full border border-[var(--dl-border-subtle)] bg-[var(--dl-surface)] px-4 py-2 text-sm font-semibold text-[var(--dl-text-secondary)]">
+          {copy.localFirstHelper}
+        </p>
+        <div className="mt-5">
+          <SecondaryButton
+            activeOperation={activeOperation}
+            blockedLabel={copy.changeProfileBlocked}
+            label={copy.changeProfile}
+            onClick={() => {
+              if (
+                !canUseProfileRoute.isAvailable ||
+                typeof onChangeProfile !== "function" ||
+                activeOperation !== null ||
+                inFlightRef.current !== null
+              ) {
+                return;
+              }
+
+              void runOperation(
+                "change-profile",
+                onChangeProfile,
+                copy.changeProfileError,
+              );
+            }}
+            operation="change-profile"
+            pendingLabel={copy.changingProfile}
+            unavailableLabel={
+              canUseProfileRoute.isAvailable
+                ? null
+                : copy.changeProfileBlocked
+            }
+          />
+        </div>
+      </section>
+
       {isOffline ? (
         <div
           aria-live="polite"
@@ -662,31 +932,8 @@ export default function HomeDashboardScreen({
         </div>
       ) : null}
 
-      <section className="rounded-[28px] border border-[var(--dl-border-subtle)] bg-[linear-gradient(135deg,var(--dl-surface),var(--dl-blush)_55%,var(--dl-parchment))] p-6">
-        <Eyebrow>{copy.profileContext}</Eyebrow>
-        <h1
-          className="mt-4 text-4xl leading-tight text-[var(--dl-text-primary)] sm:text-5xl"
-          style={{ fontFamily: fonts.display }}
-        >
-          {safeReport.greetingLabel || copy.readyHeading}
-        </h1>
-        <div className="mt-5 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-          <div>
-            <p className="text-lg font-bold text-[var(--dl-bark)]">
-              {profileName}
-            </p>
-            <p className="mt-1 text-sm text-[var(--dl-text-secondary)]">
-              {safeReport.profile.syncLabel}
-            </p>
-          </div>
-          <p className="rounded-full border border-[var(--dl-border-subtle)] bg-[var(--dl-surface)] px-4 py-2 text-sm font-semibold text-[var(--dl-text-secondary)]">
-            {copy.localFirstHelper}
-          </p>
-        </div>
-      </section>
-
-      {resolvedState === "empty" ? (
-        <SectionCard>
+      {isEmptyState ? (
+        <SectionCard testId="home-empty-card">
           <h2
             className="text-3xl text-[var(--dl-text-primary)]"
             style={{ fontFamily: fonts.display }}
@@ -699,432 +946,385 @@ export default function HomeDashboardScreen({
         </SectionCard>
       ) : null}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-        <div className="flex flex-col gap-5">
-          <SectionCard className="bg-[linear-gradient(180deg,var(--dl-surface),var(--dl-surface-soft))]">
-            <h2
-              className="text-3xl text-[var(--dl-text-primary)]"
-              style={{ fontFamily: fonts.display }}
-            >
-              {copy.startCardTitle}
-            </h2>
-            <p className="mt-2 text-sm text-[var(--dl-text-secondary)]">
-              {copy.startCardSupporting}
+      <SectionCard
+        className="bg-[linear-gradient(180deg,var(--dl-surface),var(--dl-surface-soft))]"
+        testId="home-start-card"
+      >
+        <h2
+          className="text-3xl text-[var(--dl-text-primary)]"
+          style={{ fontFamily: fonts.display }}
+        >
+          {copy.startCardTitle}
+        </h2>
+        <p className="mt-2 text-sm text-[var(--dl-text-secondary)]">
+          {copy.startCardSupporting}
+        </p>
+        <div className="mt-5">
+          <PrimaryButton
+            activeOperation={activeOperation}
+            blockedLabel={copy.startBlocked}
+            label={copy.startAnalysis}
+            onClick={() => {
+              if (
+                !canUseStartRoute.isAvailable ||
+                typeof onStartAnalysis !== "function" ||
+                activeOperation !== null ||
+                inFlightRef.current !== null
+              ) {
+                return;
+              }
+
+              void runOperation(
+                "start-analysis",
+                () =>
+                  onStartAnalysis(
+                    safeReport.profile.profileId,
+                  ),
+                copy.startError,
+              );
+            }}
+            operation="start-analysis"
+            pendingLabel={copy.startingAnalysis}
+            unavailableLabel={
+              canUseStartRoute.isGenerallyBlocked
+                ? copy.startBlocked
+                : canUseStartRoute.isOfflineBlocked
+                  ? copy.startOfflineBlocked
+                  : null
+            }
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard testId="home-routine-card">
+        <h2
+          className="text-2xl text-[var(--dl-text-primary)]"
+          style={{ fontFamily: fonts.display }}
+        >
+          {copy.routineTitle}
+        </h2>
+        {routine ? (
+          <>
+            <p className="mt-3 text-base font-bold text-[var(--dl-bark)]">
+              {routineTitleLabel}
             </p>
-            <div className="mt-5">
-              <PrimaryButton
-                activeOperation={activeOperation}
-                blocked={!canStartAnalysis}
-                blockedLabel={copy.startBlocked}
-                label={copy.startAnalysis}
-                onClick={() =>
-                  runOperation(
-                    "start-analysis",
-                    () => onStartAnalysis(safeReport.profile.profileId),
-                    copy.startError,
-                  )
-                }
-                operation="start-analysis"
-                pendingLabel={copy.startingAnalysis}
+            <p className="mt-1 text-sm text-[var(--dl-text-secondary)]">
+              {routineSupportingLabel}
+            </p>
+            <dl className="mt-4 grid gap-3 text-sm text-[var(--dl-text-secondary)] sm:grid-cols-2">
+              {routineUpdatedLabel ? (
+                <div>
+                  <dt className="font-semibold text-[var(--dl-bark)]">
+                    Updated
+                  </dt>
+                  <dd>{routineUpdatedLabel}</dd>
+                </div>
+              ) : null}
+              {routineMorningLabel ? (
+                <div>
+                  <dt className="font-semibold text-[var(--dl-bark)]">
+                    Morning
+                  </dt>
+                  <dd>{routineMorningLabel}</dd>
+                </div>
+              ) : null}
+              {routineEveningLabel ? (
+                <div>
+                  <dt className="font-semibold text-[var(--dl-bark)]">
+                    Evening
+                  </dt>
+                  <dd>{routineEveningLabel}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </>
+        ) : (
+          <div className="mt-3 rounded-[18px] bg-[var(--dl-surface-soft)] p-4 text-sm text-[var(--dl-text-secondary)]">
+            <p className="font-bold text-[var(--dl-bark)]">
+              {copy.routineEmpty}
+            </p>
+            <p className="mt-1">{copy.routineEmptySupporting}</p>
+          </div>
+        )}
+        <div className="mt-4">
+          <SecondaryButton
+            activeOperation={activeOperation}
+            blockedLabel={copy.routineBlocked}
+            label={copy.openRoutine}
+            onClick={() => {
+              if (
+                !canUseRoutineRoute.isAvailable ||
+                !hasUsableRoutineRoute(routine) ||
+                typeof onOpenRoutine !== "function" ||
+                activeOperation !== null ||
+                inFlightRef.current !== null
+              ) {
+                return;
+              }
+
+              void runOperation(
+                "open-routine",
+                () => onOpenRoutine(routine.routineId),
+                copy.routineError,
+              );
+            }}
+            operation="open-routine"
+            pendingLabel={copy.openingRoutine}
+            unavailableLabel={
+              canUseRoutineRoute.isGenerallyBlocked
+                ? copy.routineBlocked
+                : canUseRoutineRoute.isOfflineBlocked
+                  ? copy.routineOfflineBlocked
+                  : null
+            }
+          />
+        </div>
+      </SectionCard>
+
+      <SectionCard testId="home-skin-journey-card">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <div className="sm:w-44 sm:shrink-0">
+            {hasUsableSnapshotImage && !snapshotImageFailed ? (
+              <img
+                alt={getSnapshotImageAlt(snapshot)}
+                className="h-[150px] w-full rounded-[18px] object-cover"
+                key={snapshotImageKey ?? "snapshot-image"}
+                onError={() => {
+                  if (snapshotImageKey) {
+                    setFailedImageKey(snapshotImageKey);
+                  }
+                }}
+                src={snapshot.imageUrl}
               />
-            </div>
-          </SectionCard>
-
-          <SectionCard>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <div className="sm:w-44 sm:shrink-0">
-                {hasUsableSnapshotImage && !snapshotImageFailed ? (
-                  <img
-                    alt={getSnapshotImageAlt(snapshot)}
-                    className="h-[150px] w-full rounded-[18px] object-cover"
-                    key={snapshotImageKey ?? "snapshot-image"}
-                    onError={() => {
-                      if (snapshotImageKey) {
-                        setFailedImageKey(snapshotImageKey);
-                      }
-                    }}
-                    src={snapshot.imageUrl}
-                  />
-                ) : (
-                  <Placeholder label={copy.snapshotImagePlaceholder} />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <h2
-                  className="text-2xl text-[var(--dl-text-primary)]"
-                  style={{ fontFamily: fonts.display }}
-                >
-                  {copy.latestSnapshotTitle}
-                </h2>
-                {snapshot ? (
-                  <>
-                    <dl className="mt-3 grid gap-2 text-sm text-[var(--dl-text-secondary)]">
-                      <div>
-                        <dt className="font-semibold text-[var(--dl-bark)]">
-                          Captured
-                        </dt>
-                        <dd>{snapshot.capturedAtLabel}</dd>
-                      </div>
-                      <div>
-                        <dt className="font-semibold text-[var(--dl-bark)]">
-                          Snapshot
-                        </dt>
-                        <dd>{snapshot.categoryLabel}</dd>
-                      </div>
-                      {snapshot.scoreLabel ? (
-                        <div>
-                          <dt className="font-semibold text-[var(--dl-bark)]">
-                            Host label
-                          </dt>
-                          <dd>{snapshot.scoreLabel}</dd>
-                        </div>
-                      ) : null}
-                      {snapshot.comparisonLabel ? (
-                        <div>
-                          <dt className="font-semibold text-[var(--dl-bark)]">
-                            Comparison
-                          </dt>
-                          <dd>{snapshot.comparisonLabel}</dd>
-                        </div>
-                      ) : null}
-                      {snapshot.saveLabel ? (
-                        <div>
-                          <dt className="font-semibold text-[var(--dl-bark)]">
-                            Saved
-                          </dt>
-                          <dd>{snapshot.saveLabel}</dd>
-                        </div>
-                      ) : null}
-                    </dl>
-                    <div className="mt-4">
-                      <SecondaryButton
-                        activeOperation={activeOperation}
-                        blocked={!canUseLatestReportRoute}
-                        blockedLabel={copy.latestReportBlocked}
-                        label={copy.openLatestReport}
-                        onClick={() =>
-                          runOperation(
-                            "open-latest-report",
-                            () => {
-                              if (!hasUsableLatestSnapshotRoute(snapshot)) {
-                                return;
-                              }
-
-                              return onOpenLatestReport?.(snapshot.reportId);
-                            },
-                            copy.latestReportError,
-                          )
-                        }
-                        operation="open-latest-report"
-                        pendingLabel={copy.openingLatestReport}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <div className="mt-3 rounded-[18px] bg-[var(--dl-surface-soft)] p-4 text-sm text-[var(--dl-text-secondary)]">
-                    <p className="font-bold text-[var(--dl-bark)]">
-                      {copy.latestSnapshotEmpty}
-                    </p>
-                    <p className="mt-1">{copy.latestSnapshotEmptySupporting}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </SectionCard>
-
-          <SectionCard>
+            ) : (
+              <Placeholder label={copy.snapshotImagePlaceholder} />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
             <h2
               className="text-2xl text-[var(--dl-text-primary)]"
               style={{ fontFamily: fonts.display }}
             >
-              {copy.routineTitle}
+              {copy.skinJourneyTitle}
             </h2>
-            {routine ? (
-              <>
-                <p className="mt-3 text-base font-bold text-[var(--dl-bark)]">
-                  {routine.title}
-                </p>
-                <p className="mt-1 text-sm text-[var(--dl-text-secondary)]">
-                  {routine.supporting}
-                </p>
-                <dl className="mt-4 grid gap-3 text-sm text-[var(--dl-text-secondary)] sm:grid-cols-2">
-                  {routine.updatedAtLabel ? (
-                    <div>
-                      <dt className="font-semibold text-[var(--dl-bark)]">
-                        Updated
-                      </dt>
-                      <dd>{routine.updatedAtLabel}</dd>
-                    </div>
-                  ) : null}
-                  {routine.morningSummaryLabel ? (
-                    <div>
-                      <dt className="font-semibold text-[var(--dl-bark)]">
-                        Morning
-                      </dt>
-                      <dd>{routine.morningSummaryLabel}</dd>
-                    </div>
-                  ) : null}
-                  {routine.eveningSummaryLabel ? (
-                    <div>
-                      <dt className="font-semibold text-[var(--dl-bark)]">
-                        Evening
-                      </dt>
-                      <dd>{routine.eveningSummaryLabel}</dd>
-                    </div>
-                  ) : null}
-                </dl>
-                <div className="mt-4">
-                  <SecondaryButton
-                    activeOperation={activeOperation}
-                    blocked={!canUseRoutineRoute}
-                    blockedLabel={copy.routineBlocked}
-                    label={copy.openRoutine}
-                    onClick={() =>
-                      runOperation(
-                        "open-routine",
-                        () => {
-                          if (!hasUsableRoutineRoute(routine)) {
-                            return;
-                          }
-
-                          return onOpenRoutine?.(routine.routineId);
-                        },
-                        copy.routineError,
-                      )
-                    }
-                    operation="open-routine"
-                    pendingLabel={copy.openingRoutine}
-                  />
+            {snapshot ? (
+              <dl className="mt-3 grid gap-2 text-sm text-[var(--dl-text-secondary)]">
+                <div>
+                  <dt className="font-semibold text-[var(--dl-bark)]">
+                    Captured
+                  </dt>
+                  <dd>{snapshotCapturedLabel}</dd>
                 </div>
-              </>
+                <div>
+                  <dt className="font-semibold text-[var(--dl-bark)]">
+                    Latest summary
+                  </dt>
+                  <dd>{snapshotCategoryLabel}</dd>
+                </div>
+                {snapshotScoreLabel ? (
+                  <div>
+                    <dt className="font-semibold text-[var(--dl-bark)]">
+                      Host label
+                    </dt>
+                    <dd>{snapshotScoreLabel}</dd>
+                  </div>
+                ) : null}
+                {snapshotComparisonLabel ? (
+                  <div>
+                    <dt className="font-semibold text-[var(--dl-bark)]">
+                      Host summary
+                    </dt>
+                    <dd>{snapshotComparisonLabel}</dd>
+                  </div>
+                ) : null}
+                {snapshotSaveLabel ? (
+                  <div>
+                    <dt className="font-semibold text-[var(--dl-bark)]">
+                      Saved
+                    </dt>
+                    <dd>{snapshotSaveLabel}</dd>
+                  </div>
+                ) : null}
+              </dl>
             ) : (
               <div className="mt-3 rounded-[18px] bg-[var(--dl-surface-soft)] p-4 text-sm text-[var(--dl-text-secondary)]">
                 <p className="font-bold text-[var(--dl-bark)]">
-                  {copy.routineEmpty}
+                  {copy.latestSnapshotEmpty}
                 </p>
-                <p className="mt-1">{copy.routineEmptySupporting}</p>
+                <p className="mt-1">
+                  {copy.latestSnapshotEmptySupporting}
+                </p>
               </div>
             )}
-          </SectionCard>
-        </div>
+            <p className="mt-4 text-sm text-[var(--dl-text-secondary)]">
+              {copy.progressSupporting}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <SecondaryButton
+                activeOperation={activeOperation}
+                blockedLabel={copy.latestReportBlocked}
+                label={copy.openLatestReport}
+                onClick={() => {
+                  if (
+                    !canUseLatestReportRoute.isAvailable ||
+                    !hasUsableLatestSnapshotRoute(snapshot) ||
+                    typeof onOpenLatestReport !== "function" ||
+                    activeOperation !== null ||
+                    inFlightRef.current !== null
+                  ) {
+                    return;
+                  }
 
-        <div className="flex flex-col gap-5">
-          <SectionCard>
-            <h2
-              className="text-2xl text-[var(--dl-text-primary)]"
-              style={{ fontFamily: fonts.display }}
-            >
-              {copy.quickActionsTitle}
-            </h2>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-              <QuickAction
-                activeOperation={activeOperation}
-                blocked={scannerBlocked}
-                blockedLabel={
-                  isOffline && !isGuestScannerAvailableOffline
-                    ? copy.scannerOfflineBlocked
-                    : copy.scannerBlocked
+                  void runOperation(
+                    "open-latest-report",
+                    () => onOpenLatestReport(snapshot.reportId),
+                    copy.latestReportError,
+                  );
+                }}
+                operation="open-latest-report"
+                pendingLabel={copy.openingLatestReport}
+                unavailableLabel={
+                  canUseLatestReportRoute.isGenerallyBlocked
+                    ? copy.latestReportBlocked
+                    : canUseLatestReportRoute.isOfflineBlocked
+                      ? copy.latestReportOfflineBlocked
+                      : null
                 }
-                label={copy.openScanner}
-                onClick={() =>
-                  runOperation("open-scanner", onOpenGuestScanner, copy.scannerError)
-                }
-                operation="open-scanner"
-                pendingLabel={copy.openingScanner}
-                supporting={copy.scannerSupporting}
-                title={copy.scannerTitle}
               />
-              <QuickAction
+              <SecondaryButton
                 activeOperation={activeOperation}
-                blocked={!canOpenProgress || !onOpenProgress}
                 blockedLabel={copy.progressBlocked}
                 label={copy.openProgress}
-                onClick={() =>
-                  runOperation(
+                onClick={() => {
+                  if (
+                    !canUseProgressRoute.isAvailable ||
+                    typeof onOpenProgress !== "function" ||
+                    activeOperation !== null ||
+                    inFlightRef.current !== null
+                  ) {
+                    return;
+                  }
+
+                  void runOperation(
                     "open-progress",
-                    () => onOpenProgress?.(),
+                    () => onOpenProgress(),
                     copy.progressError,
-                  )
-                }
+                  );
+                }}
                 operation="open-progress"
                 pendingLabel={copy.openingProgress}
-                supporting={copy.progressSupporting}
-                title={copy.progressTitle}
-              />
-              <QuickAction
-                activeOperation={activeOperation}
-                blocked={!canOpenOrders || !onOpenOrders}
-                blockedLabel={copy.ordersBlocked}
-                label={copy.openOrders}
-                onClick={() =>
-                  runOperation("open-orders", () => onOpenOrders?.(), copy.ordersError)
+                unavailableLabel={
+                  canUseProgressRoute.isGenerallyBlocked
+                    ? copy.progressBlocked
+                    : canUseProgressRoute.isOfflineBlocked
+                      ? copy.progressOfflineBlocked
+                      : null
                 }
-                operation="open-orders"
-                pendingLabel={copy.openingOrders}
-                supporting={copy.ordersSupporting}
-                title={copy.ordersTitle}
-              />
-              <QuickAction
-                activeOperation={activeOperation}
-                blocked={!canOpenStore}
-                blockedLabel={copy.storeBlocked}
-                label={copy.openStore}
-                onClick={() =>
-                  runOperation("open-store", onOpenStore, copy.storeError)
-                }
-                operation="open-store"
-                pendingLabel={copy.openingStore}
-                supporting={copy.storeSupporting}
-                title={copy.storeTitle}
               />
             </div>
-          </SectionCard>
-
-          {recentOrder ? (
-            <SectionCard>
-              <h2
-                className="text-2xl text-[var(--dl-text-primary)]"
-                style={{ fontFamily: fonts.display }}
-              >
-                {copy.recentOrderTitle}
-              </h2>
-              <p className="mt-3 text-base font-bold text-[var(--dl-bark)]">
-                {recentOrder.orderReferenceLabel}
-              </p>
-              <p className="mt-1 text-sm text-[var(--dl-text-secondary)]">
-                {recentOrder.statusLabel}
-              </p>
-              {recentOrder.supporting ? (
-                <p className="mt-2 text-sm text-[var(--dl-text-secondary)]">
-                  {recentOrder.supporting}
-                </p>
-              ) : null}
-              <div className="mt-4">
-                <SecondaryButton
-                  activeOperation={activeOperation}
-                  blocked={!canUseRecentOrderRoute}
-                  blockedLabel={copy.recentOrderBlocked}
-                  label={copy.openRecentOrder}
-                  onClick={() =>
-                    runOperation(
-                      "open-recent-order",
-                      () => {
-                        if (!hasUsableRecentOrderRoute(recentOrder)) {
-                          return;
-                        }
-
-                        return onOpenRecentOrder?.(recentOrder.orderId);
-                      },
-                      copy.recentOrderError,
-                    )
-                  }
-                  operation="open-recent-order"
-                  pendingLabel={copy.openingRecentOrder}
-                />
-              </div>
-            </SectionCard>
-          ) : null}
-
-          {showEnvironmentalModule ? (
-            <SectionCard>
-              <h2
-                className="text-2xl text-[var(--dl-text-primary)]"
-                style={{ fontFamily: fonts.display }}
-              >
-                {copy.environmentTitle}
-              </h2>
-              {/* Host owns this feature flag and the environmental adapter. */}
-              {hasEnvironmentalMeasurements(environment) ? (
-                <dl className="mt-3 grid gap-3 text-sm text-[var(--dl-text-secondary)]">
-                  {isNonWhitespaceString(environment?.uvLabel) ? (
-                    <div>
-                      <dt className="font-semibold text-[var(--dl-bark)]">
-                        UV
-                      </dt>
-                      <dd>{environment.uvLabel}</dd>
-                    </div>
-                  ) : null}
-                  {isNonWhitespaceString(environment?.aqiLabel) ? (
-                    <div>
-                      <dt className="font-semibold text-[var(--dl-bark)]">
-                        AQI
-                      </dt>
-                      <dd>{environment.aqiLabel}</dd>
-                    </div>
-                  ) : null}
-                  {environment?.guidanceLabel ? (
-                    <div>
-                      <dt className="font-semibold text-[var(--dl-bark)]">
-                        Guidance
-                      </dt>
-                      <dd>{environment.guidanceLabel}</dd>
-                    </div>
-                  ) : null}
-                  {environment?.updatedAtLabel ? (
-                    <div>
-                      <dt className="font-semibold text-[var(--dl-bark)]">
-                        Updated
-                      </dt>
-                      <dd>{environment.updatedAtLabel}</dd>
-                    </div>
-                  ) : null}
-                </dl>
-              ) : (
-                <p
-                  className="mt-3 rounded-[18px] bg-[var(--dl-surface-soft)] p-4 text-sm font-semibold text-[var(--dl-text-secondary)]"
-                  role="status"
-                >
-                  {copy.environmentUnavailable}
-                </p>
-              )}
-            </SectionCard>
-          ) : null}
+          </div>
         </div>
-      </div>
-    </>,
-  );
-}
+      </SectionCard>
 
-function QuickAction({
-  activeOperation,
-  blocked,
-  blockedLabel,
-  label,
-  onClick,
-  operation,
-  pendingLabel,
-  supporting,
-  title,
-}: {
-  activeOperation: HomeDashboardOperation;
-  blocked: boolean;
-  blockedLabel: string;
-  label: string;
-  onClick: () => void;
-  operation: Exclude<HomeDashboardOperation, null>;
-  pendingLabel: string;
-  supporting: string;
-  title: string;
-}) {
-  return (
-    <div className="rounded-[18px] border border-[var(--dl-border-subtle)] bg-[var(--dl-surface-soft)] p-4">
-      <h3 className="text-base font-bold text-[var(--dl-bark)]">
-        {title}
-      </h3>
-      <p className="mt-1 min-h-[40px] text-sm text-[var(--dl-text-secondary)]">
-        {supporting}
-      </p>
-      <div className="mt-3">
-        <SecondaryButton
-          activeOperation={activeOperation}
-          blocked={blocked}
-          blockedLabel={blockedLabel}
-          label={label}
-          onClick={onClick}
-          operation={operation}
-          pendingLabel={pendingLabel}
-        />
-      </div>
-    </div>
+      {shouldShowOrderAttention && recentOrder ? (
+        <SectionCard testId="home-attention-card">
+          <h2
+            className="text-2xl text-[var(--dl-text-primary)]"
+            style={{ fontFamily: fonts.display }}
+          >
+            {copy.recentOrderTitle}
+          </h2>
+          <p className="mt-3 text-base font-bold text-[var(--dl-bark)]">
+            {recentOrderReferenceLabel}
+          </p>
+          <p className="mt-1 text-sm text-[var(--dl-text-secondary)]">
+            {recentOrderStatusLabel}
+          </p>
+          {recentOrderSupportingLabel ? (
+            <p className="mt-2 text-sm text-[var(--dl-text-secondary)]">
+              {recentOrderSupportingLabel}
+            </p>
+          ) : null}
+          <div className="mt-4">
+            <SecondaryButton
+              activeOperation={activeOperation}
+              blockedLabel={copy.recentOrderBlocked}
+              label={copy.openRecentOrder}
+              onClick={() => {
+                if (
+                  !canUseRecentOrderRoute.isAvailable ||
+                  !hasUsableRecentOrderRoute(recentOrder) ||
+                  typeof onOpenRecentOrder !== "function" ||
+                  activeOperation !== null ||
+                  inFlightRef.current !== null
+                ) {
+                  return;
+                }
+
+                void runOperation(
+                  "open-recent-order",
+                  () => onOpenRecentOrder(recentOrder.orderId),
+                  copy.recentOrderError,
+                );
+              }}
+              operation="open-recent-order"
+              pendingLabel={copy.openingRecentOrder}
+              unavailableLabel={
+                canUseRecentOrderRoute.isGenerallyBlocked
+                  ? copy.recentOrderBlocked
+                  : canUseRecentOrderRoute.isOfflineBlocked
+                    ? copy.recentOrderOfflineBlocked
+                    : null
+              }
+            />
+          </div>
+        </SectionCard>
+      ) : null}
+
+      {shouldShowEnvironmentAttention && environment ? (
+        <SectionCard testId="home-attention-card">
+          <h2
+            className="text-2xl text-[var(--dl-text-primary)]"
+            style={{ fontFamily: fonts.display }}
+          >
+            {copy.environmentTitle}
+          </h2>
+          <dl className="mt-3 grid gap-3 text-sm text-[var(--dl-text-secondary)]">
+            {environmentUvLabel ? (
+              <div>
+                <dt className="font-semibold text-[var(--dl-bark)]">
+                  UV
+                </dt>
+                <dd>{environmentUvLabel}</dd>
+              </div>
+            ) : null}
+            {environmentAqiLabel ? (
+              <div>
+                <dt className="font-semibold text-[var(--dl-bark)]">
+                  AQI
+                </dt>
+                <dd>{environmentAqiLabel}</dd>
+              </div>
+            ) : null}
+            {environmentGuidanceLabel ? (
+              <div>
+                <dt className="font-semibold text-[var(--dl-bark)]">
+                  Guidance
+                </dt>
+                <dd>{environmentGuidanceLabel}</dd>
+              </div>
+            ) : null}
+            {environmentUpdatedLabel ? (
+              <div>
+                <dt className="font-semibold text-[var(--dl-bark)]">
+                  Updated
+                </dt>
+                <dd>{environmentUpdatedLabel}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </SectionCard>
+      ) : null}
+    </>,
   );
 }

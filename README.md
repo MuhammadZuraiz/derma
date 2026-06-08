@@ -1,5 +1,154 @@
 # DermaLens Frontend
 
+## AppBottomNavigation Integration
+
+`AppBottomNavigation` is the UX-R1 primary navigation component for the approved returning-user navigation direction. It is not imported directly by `app/page.tsx`; UX-R5C integrates it through `ReturningUserNavigationShell`.
+
+Rendering owner:
+
+```text
+ReturningUserNavigationShell
+```
+
+The component renders exactly five visible actions:
+
+```text
+Home
+Routine
+Scan
+Progress
+More
+```
+
+Home, Routine, Progress, and More are root destinations. Scan is an explicit dialog-opening action for the future scan action sheet, not a current-page destination. Scan exposes `aria-haspopup="dialog"` and host-supplied `aria-expanded` state, while the current root destination uses `aria-current="page"`.
+
+Route availability remains host-controlled through callback presence and `canOpen...` flags. Blocked actions stay visible, missing callbacks fail closed, callbacks remain explicit, duplicate activation is guarded synchronously, and callback rejection becomes a local polite toast above the bar. Repeated rejection replaces the existing local toast safely, and an identical replacement toast restarts its complete auto-dismiss window. Toast occurrence state remains view-local and is not persisted.
+
+UX-R5A adds an optional `scanTriggerRef` bridge attached only to the native centre Scan button. The bridge exists so the future `ReturningUserNavigationShell` can restore external focus after `ScanActionsSheet` dismissal. `AppBottomNavigation` does not restore focus itself, query the DOM, infer dismissal, or expose refs for Home, Routine, Progress, or More.
+
+`AppBottomNavigation` does not own route state, render the Scan sheet, render the shell, call APIs, persist state, use browser history, import a routing library, access camera or picker capabilities, open external navigation, or implement Screen 27. Route-controller integration occurs only through `ReturningUserNavigationShell`. The standalone regression suite lives at `components/app-bottom-navigation.test.tsx`.
+
+## ScanActionsSheet Integration
+
+`ScanActionsSheet` is the UX-R2 modal action sheet for the approved returning-user navigation direction. It is not imported directly by `app/page.tsx`, is not imported by `AppBottomNavigation`, and is integrated only through `ReturningUserNavigationShell`.
+
+Rendering owner:
+
+```text
+ReturningUserNavigationShell
+```
+
+Opener:
+
+```text
+AppBottomNavigation Scan action
+```
+
+The sheet renders exactly two explicit scan-option actions:
+
+```text
+Start facial scan
+Scan ingredient label
+```
+
+Cancel and Escape close only while the sheet is idle, and overlay click does not dismiss the sheet. Action availability is independently host-controlled, blocked options stay visible, callbacks remain explicit, missing callbacks fail closed, and duplicate or conflicting activation is guarded synchronously.
+
+Successful callbacks do not mutate open state locally. The shell or route controller owns onward navigation and sheet closing. Focus moves into the sheet when it opens and remains trapped while open. The dialog panel is a programmatic pending-state focus anchor with an explicit visible focus outline; while every visible control is disabled during a route callback, focus remains trapped on the dialog panel. When the panel fallback itself owns focus and enabled controls exist, Tab moves to the first enabled control and Shift+Tab moves to the last enabled control. After callback settlement, focus returns to the activated option when available or falls back to the first available option and then Cancel. Host capability refreshes repair focus when the currently focused option becomes blocked.
+
+`ReturningUserNavigationShell` owns root-source preservation, background `inert` and `aria-hidden`, and external focus restoration to the centre Scan trigger after dismissal.
+
+Rejected scan-option callbacks become a sheet-local polite toast. Repeated rejection replaces the visible toast safely, and an identical replacement toast restarts its complete dismissal window. Toast occurrence state remains view-local and is not persisted.
+
+`ScanActionsSheet` does not call APIs, persist state, use browser history, import a routing library, request camera permission, open a native picker, begin analysis, begin OCR, render the shell, or own route state. Shell integration occurs through `ReturningUserNavigationShell`. The standalone regression suite lives at `components/scan-actions-sheet.test.tsx`.
+
+## ReturningUserNavigationShell Integration
+
+`ReturningUserNavigationShell` is the UX-R5C presentation shell now rendered by `app/page.tsx` for the approved returning-user navigation direction.
+
+Integrated root surfaces:
+
+```text
+HomeDashboardScreen
+root RoutineRecommendationsScreen
+ProgressTrackingScreen
+MoreHubScreen
+```
+
+Focused flows remain shell-free. The shell composes:
+
+```text
+children
+AppBottomNavigation
+ScanActionsSheet when open
+```
+
+The shell renders navigation exactly once around the current eligible root content and owns the content bottom spacing needed for the fixed bar. It owns Scan-sheet open and close state, freezes the root source when Scan opens, and passes that frozen source to facial-scan and ingredient-scanner callbacks. The demo controller maps that frozen source into source-aware `ImageSourceSelectionScreen` Back and `GuestIngredientScannerEntryScreen` Back destinations. Successful sheet-option callbacks close the sheet; rejected sheet-option callbacks remain sheet-local toast concerns and keep the sheet open.
+
+The shell owns background `inert` and `aria-hidden` while the sheet is open. It uses the optional UX-R5A `scanTriggerRef` bridge to restore focus to the native Scan trigger after dismissal when the trigger exists and remains enabled; it does not restore focus to a disabled Scan trigger.
+
+The shell uses StrictMode-safe mounted tracking. Cleanup synchronously clears the open-sheet ref without setting React state. Successful Scan-option callbacks close local sheet state only while the shell remains mounted; when onward routing unmounts the shell, callback settlement does not attempt local React state updates or external Scan-trigger focus restoration. Mounted dismissal still restores focus to the enabled Scan trigger.
+
+`ReturningUserNavigationShell` does not own route state, mutate `activeDestination`, call APIs, persist state, use browser history, import a routing library, import screens, render `MoreHubScreen` directly, or infer route success. Home primary facial-scan CTA remains direct and does not open the sheet. UX-R6 section-level visible-shell expansion remains deferred, so Store, Order history, Profile management, Ingredient scanner entry, and all other focused routes remain shell-free. The standalone regression suite lives at `components/returning-user-navigation-shell.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
+
+## MoreHubScreen Integration
+
+`MoreHubScreen` is Screen 27, the integrated More root content surface for the approved returning-user navigation direction. It is rendered by `app/page.tsx` only inside `ReturningUserNavigationShell` with More selected.
+
+Rendering owner:
+
+```text
+ReturningUserNavigationShell
+```
+
+`MoreHubScreen` is content-only and must not embed `AppBottomNavigation`. It renders exactly four grouped destinations:
+
+```text
+Store
+Orders
+Ingredient scanner
+Profiles and optional sync
+```
+
+Integrated visible routes:
+
+```text
+MoreHubScreen
+-> Store
+-> DermaLensStoreRoutineCollectionScreen
+-> Back
+-> MoreHubScreen
+
+MoreHubScreen
+-> Orders
+-> OrderHistoryScreen
+-> Back
+-> MoreHubScreen
+
+MoreHubScreen
+-> Ingredient scanner
+-> GuestIngredientScannerEntryScreen
+-> Back
+-> MoreHubScreen
+
+MoreHubScreen
+-> Profiles and optional sync
+-> ProfileSwitcherAndManagementScreen
+-> Back
+-> MoreHubScreen
+
+ProfileSwitcherAndManagementScreen
+-> Manage sync settings
+-> AccountAndOptionalSyncScreen
+-> Back
+-> ProfileSwitcherAndManagementScreen
+```
+
+More does not route directly to `AccountAndOptionalSyncScreen`; account-sync remains nested through Profile management. Route availability remains host-controlled, offline capability is independent per destination, blocked destinations remain visible, and general host blocks beat reconnect labels. Callbacks remain explicit, missing callbacks fail closed, duplicate and conflicting activation are synchronously guarded, callback rejection becomes a local polite toast, and identical replacement toast copy restarts its complete dismissal window.
+
+Loading and error states are readable. Retry is explicit and guarded. There is no separate Empty state because Ready cards stay visible and fail closed individually. There is no Back action because More is a future root destination.
+
+`MoreHubScreen` does not call APIs, persist state, use browser history, import a routing library, access camera or picker capabilities, route directly to account sync, render bottom-navigation markup, render the shell, or mutate route state. Store, Orders, Ingredient scanner, and Profiles are explicit callbacks in the demo controller; each outbound route is shell-free during UX-R5C and returns explicitly to More. The standalone regression suite lives at `components/more-hub-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
+
 ## Checkout Review Route Integration
 
 The current demo controller routes the checkout sequence as:
@@ -72,37 +221,50 @@ ResultsSummaryScreen
 
 First-time profile setup still routes directly to `ImageSourceSelectionScreen`, so the first scan flow remains unchanged. Production launch routing and returning-user detection remain host-owned; the demo does not infer returning-user state from local storage, session storage, IndexedDB, cookies, or any other persistence.
 
-The intended route map is host-owned entry into dashboard after a profile exists, with user-activated routes out to new scan, latest report, active routine, ingredient scanner, progress, orders, store, and recent-order details. The dashboard renders profile, snapshot, routine, order, scanner, progress, store, sync, UV, and AQI values only as host-supplied display data and callback availability.
+UX-R4 simplified the dashboard into a content-only Home root, and UX-R5C now renders it inside `ReturningUserNavigationShell` from `app/page.tsx`. The screen prioritizes a smaller reading order: active-profile greeting and profile-switch shortcut, a dominant primary facial-scan card, Today's routine, Skin journey, one conditional attention card, and the local toast region. `HomeDashboardScreen` does not embed `AppBottomNavigation`, `ScanActionsSheet`, `ReturningUserNavigationShell`, or any bottom-navigation markup.
 
-Current demo dashboard routes:
+Current simplified Home routes:
 
 ```text
-Start new scan -> ImageSourceSelectionScreen
+Start facial scan -> ImageSourceSelectionScreen
 Change profile -> ProfileSwitcherAndManagementScreen
-Latest report -> ResultsSummaryScreen
-Active routine -> RoutineRecommendationsScreen
-Ingredient scanner -> GuestIngredientScannerEntryScreen
-Progress -> ProgressTrackingScreen
-Orders -> OrderHistoryScreen
+Today's routine -> root RoutineRecommendationsScreen
+Skin journey View progress -> root ProgressTrackingScreen
+Skin journey Open latest report -> ResultsSummaryScreen
 Recent order details -> OrderDetailsScreen
-Store -> DermaLensStoreRoutineCollectionScreen
 ```
 
-The demo route controller owns source-aware Back context for routes that can now be opened from more than one place. Dashboard-origin actions set Back to the dashboard for Start new scan, Change profile, Active routine, and Store. Progress-origin actions set Back to Progress tracking for Start new scan, Open report, and Open routine. Non-dashboard entries reset their local sources: consent keeps profile Back on Privacy consent, first-time profile save keeps image-source Back on Profile setup, profile-management Add profile keeps image-source Back on Profile management after Save, results-summary routine entry returns to Results summary, full-report routine entry returns to Full report, routine store entry returns to Routine, and Continue shopping resets Store Back to Routine.
+The Home primary CTA starts the facial-scan flow directly after explicit user activation. It routes only into `ImageSourceSelectionScreen`; it does not open `ScanActionsSheet`, request camera permission, open a native picker, begin analysis, or infer a scanner choice. Source-aware Back remains:
+
+```text
+Home
+-> Start facial scan
+-> ImageSourceSelectionScreen
+-> Back
+-> Home
+```
+
+Home summary routes are intentionally split between root destinations and focused review routes. Today's routine opens the root Routine destination, and Skin journey View progress opens the root Progress destination. Skin journey Open latest report remains a focused `ResultsSummaryScreen` route that closes back to Home. The conditional active-order update remains a focused `OrderDetailsScreen` route that returns back to Home.
+
+The persistent Store, Orders, and Ingredient scanner shortcuts were removed from Home. Store and Orders are visible through `MoreHubScreen`; Ingredient scanner is available through the centre Scan action sheet and through More. The `HomeDashboardScreen` contract remains backward-compatible with legacy callback props, but the `app/page.tsx` Home invocation no longer supplies an Orders callback and the simplified Home surface does not render Store, Orders, or Ingredient-scanner controls. Required legacy Store and Ingredient callback slots remain inert compatibility callbacks because the approved component contract still requires them.
+
+The demo route controller owns source-aware Back context for routes that can be opened from more than one place. Home-origin actions set Back to Home for Start facial scan, Change profile, root Routine, root Progress, latest report review, and recent-order details. Progress-origin actions set Back to Progress tracking for Start new scan, Open report, and Open routine. Non-dashboard entries reset their local sources: consent keeps profile Back on Privacy consent, first-time profile save keeps image-source Back on Profile setup, profile-management Add profile keeps image-source Back on Profile management after Save, results-summary routine entry returns to Results summary, full-report routine entry returns to Full report, routine store entry returns to Routine, and Continue shopping resets Store Back to Routine.
 
 Dashboard active-profile context now follows the controller-owned managed-profile selection. Selecting a known managed profile updates the in-memory active opaque profile ID used by the dashboard report, and Dashboard Start new scan passes that currently active profile ID into its callback. Known demo managed-profile labels are also held in controller-owned in-memory fixture state, so switching away from the primary profile and back does not silently reset its saved demo name.
 
-Dashboard Progress is now enabled and opens `ProgressTrackingScreen` with the active managed profile supplied as host-shaped progress context. Orders is enabled and opens `OrderHistoryScreen` as the broader first-party order-list route. Recent-order details remains enabled as a direct `OrderDetailsScreen` shortcut for the known fixed demo order. The Dashboard ingredient scanner route is enabled and opens `GuestIngredientScannerEntryScreen` with the active managed profile supplied as optional local-profile context.
+Dashboard Progress remains enabled as a root Progress shortcut with the active managed profile supplied as host-shaped progress context. Recent-order details remains enabled only as the conditional active-order attention card for the known fixed demo order. Orders no longer appears as a persistent Home shortcut, and the Dashboard ingredient scanner route no longer appears on Home.
 
 The screen preserves the local-first helper copy, `Your profile stays local unless you choose to sync it.`, and positions sync as optional. UV/AQI content remains behind `showEnvironmentalModule`; when the flag is false, environmental payloads are not rendered, and the screen never requests location data or fetches environmental values directly.
 
-Offline status is informational: locally supplied profile, snapshot, routine, and order content remains readable. Blocked actions stay visible with disabled labels, callback rejections become non-blocking toast messages, and opaque IDs remain callback-only context.
+The conditional attention card renders at most one module: active order update when relevant, otherwise environmental UV/AQI guidance only when enabled and supplied, otherwise no attention card. Offline status is informational: locally supplied profile, snapshot, routine, and order content remains readable. Each visible action has independent host-controlled offline capability, blocked actions stay visible with disabled labels, callback rejections become non-blocking toast messages, and opaque IDs remain callback-only context.
 
-Dashboard profile context fails closed when the host supplies a blank or whitespace-only profile ID or display name, and Start scan is not activated without usable profile context. Latest-report, routine, and recent-order cards remain readable when their required route IDs are blank, but their actions stay visible and disabled.
+Dashboard profile context fails closed when the host supplies a blank or whitespace-only profile ID or display name, and Start scan is not activated without usable profile context. Optional host-supplied greeting copy is rendered only when it is a usable non-whitespace string; valid greeting copy is trimmed, while missing, blank, whitespace-only, or malformed optional greeting copy falls back to `Welcome back, {displayName}`. Required profile ID and display-name guards remain unchanged. Latest-report, routine, and recent-order cards remain readable when their required route IDs are blank, but their actions stay visible and disabled.
+
+Host-supplied Dashboard display labels are runtime-hardened before rendering. Usable display copy is trimmed for presentation only, malformed required summary labels degrade into neutral local fallback copy, and malformed optional metadata labels are omitted. Snapshot alt text fails safely into `Latest skincare snapshot`. Action availability remains controlled by opaque route IDs, callback presence, host flags, offline capability, and pending state rather than display-label quality. No host payload is mutated, no normalized value is persisted, and UX-R4 remains content-only inside the UX-R5C shell.
 
 Environmental availability requires at least one usable UV or AQI measurement. Guidance and timestamp metadata may supplement a UV/AQI value, but they do not independently make the environmental card available. Whitespace-only snapshot image URLs render the local `Snapshot image unavailable` placeholder instead of an image element.
 
-No API calls, persistence writes, geolocation requests, direct environmental fetches, affiliate routes, marketplace routes, or host-adapter modules were introduced. The dashboard regression suite lives at `components/home-dashboard-screen.test.tsx`, and route-controller coverage for the demo integration lives in `app/page.test.tsx`.
+No API calls, persistence writes, geolocation requests, direct environmental fetches, affiliate routes, marketplace routes, browser history, routing libraries, bottom-navigation markup, shell imports, or host-adapter modules were introduced. The dashboard regression suite lives at `components/home-dashboard-screen.test.tsx`, and route-controller coverage for the demo integration lives in `app/page.test.tsx`.
 
 ## ProfileSwitcherAndManagementScreen Integration
 
@@ -160,7 +322,16 @@ The profile list remains host-owned. The host supplies the ordered list, active-
 
 Repeated profile-card controls keep concise visible labels while using contextual accessible names such as `Select profile: Amara`, `Edit profile: Amara`, and `Delete profile: Amara`. Non-string, blank, and whitespace-only display names render the local safe fallback `Unnamed profile` without mutating the host payload.
 
-Selection, editing, add-profile, deletion, and sync settings remain callback-driven. In the current demo controller, selection state and stable demo labels are kept in memory only so the route can demonstrate active-profile switching. Edit, deletion, sync settings, and Retry are future-adapter logs only. The screen does not persist profile data, edit profile data, add profiles, delete profile data, toggle sync, create an account, or infer profile limits internally.
+Selection, editing, add-profile, deletion, and sync settings remain callback-driven. In the current demo controller, selection state and stable demo labels are kept in memory only so the route can demonstrate active-profile switching. Edit, deletion, and Retry remain future-adapter logs only. Manage sync settings now opens `AccountAndOptionalSyncScreen` and returns to `ProfileSwitcherAndManagementScreen`:
+
+```text
+Manage sync settings
+-> AccountAndOptionalSyncScreen
+-> Back
+-> ProfileSwitcherAndManagementScreen
+```
+
+Profile-management Back remains source-aware after this nested route. The screen does not persist profile data, edit profile data, add profiles, delete profile data, toggle sync, create an account, or infer profile limits internally.
 
 The screen preserves the local-first copy, `Profiles stay local on this device unless you choose to sync them.`, and positions cloud sync as optional. The optional-sync card explains that local profiles remain usable without an account, keeps Manage sync settings visible, and disables it when the host withholds the route.
 
@@ -177,11 +348,23 @@ No browser history API, routing library, persistence writes, local storage, sess
 `GuestIngredientScannerEntryScreen` is Screen 20, a low-friction scanner-entry route for ingredient guidance now integrated into `app/page.tsx`. It opens from:
 
 ```text
+Visible current entry:
+
 WelcomeScreen
 -> Guest ingredient scanner
 -> GuestIngredientScannerEntryScreen
 
-HomeDashboardScreen
+Root-navigation entry:
+
+ReturningUserNavigationShell
+-> AppBottomNavigation Scan
+-> ScanActionsSheet
+-> Scan ingredient label
+-> GuestIngredientScannerEntryScreen
+
+Secondary More entry:
+
+MoreHubScreen
 -> Ingredient scanner
 -> GuestIngredientScannerEntryScreen
 ```
@@ -202,8 +385,9 @@ Current demo route behavior:
 
 ```text
 Welcome -> Scanner entry in guest mode
-Dashboard -> Scanner entry with active optional local-profile context
-Scanner entry Back -> source-aware Welcome or Dashboard
+Shell Scan from Home, Routine, Progress, or More -> Scanner entry with active optional local-profile context
+MoreHubScreen -> Ingredient scanner -> Scanner entry with active optional local-profile context
+Scanner entry Back -> source-aware Welcome, Home, root Routine, Progress, or More
 Scanner entry Change profile -> Profile management -> source-aware return to Scanner entry
 Scanner entry Scan without a profile -> clears scanner-only optional context -> remains on Scanner entry
 Scanner entry Take ingredient photo -> IngredientInputReviewScreen with a fixed camera-photo draft fixture
@@ -376,12 +560,12 @@ OrderConfirmationAndPaymentResultScreen
 -> OrderConfirmationAndPaymentResultScreen
 
 HomeDashboardScreen
--> Recent order details
+-> conditional Recent order details
 -> OrderDetailsScreen
 -> Back
 -> HomeDashboardScreen
 
-HomeDashboardScreen
+MoreHubScreen
 -> Orders
 -> OrderHistoryScreen
 -> View order details
@@ -390,7 +574,7 @@ HomeDashboardScreen
 -> OrderHistoryScreen
 ```
 
-Dashboard Orders now opens `OrderHistoryScreen`; Dashboard Recent-order details remains a direct Screen 24 shortcut. Screen 24 does not add another future route.
+Orders is visibly exposed through `MoreHubScreen`; simplified `HomeDashboardScreen` no longer renders an Orders shortcut. Dashboard Recent-order details remains a direct conditional Screen 24 shortcut. Screen 24 does not add another future route.
 
 The host owns order ID, order-reference label, status label and tone, item order, item labels, delivery-address summary, shipping-update order, shipping-update labels, receipt labels, support availability, receipt-download availability, offline capability, persistence, logistics retrieval, payment-result retrieval, and routing. Opaque order, line-item, and update IDs remain callback-only context and are never rendered directly. The demo reuses the fixed known opaque order ID from Dashboard recent order and the confirmed payment-result fixture; unknown IDs fail closed instead of substituting another order.
 
@@ -406,20 +590,20 @@ The empty-items state is readable and neutral for both explicit `state="empty"` 
 
 Support is a host-owned callback that passes only the usable `orderId`. In the current demo, Support remains a future-adapter log only and stays on Order details. Receipt download is also host-owned, passes only the usable `orderId`, has its own offline capability, and does not synthesize or persist a receipt. In the current demo, receipt download remains a future-adapter log only and stays on Order details. Retry also remains a future-adapter log only and does not fetch. Primitive, array, and null receipt contexts fail closed: they omit the receipt card and cannot activate receipt download. A malformed plain receipt object may still render the receipt card with `Total unavailable` while retaining the normal host-controlled download route. Callback failures become readable non-blocking toasts.
 
-No receipt synthesis, total calculation, shipping calculation, tax calculation, subtotal calculation, quantity calculation, payment-success inference, shipment-status inference, direct logistics API call, polling, API call, persistence, external navigation, raw tracking URL, raw receipt URL, exposed payment-session ID, gateway ID, transaction ID, camera access, picker access, file input, forced sign-in, affiliate route, marketplace route, external-seller route, or sponsored route was introduced for Screen 24. Screen 25 is now integrated separately through Dashboard Orders and reuses Screen 24 only for the explicit View order details path. The standalone regression suite lives at `components/order-details-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
+No receipt synthesis, total calculation, shipping calculation, tax calculation, subtotal calculation, quantity calculation, payment-success inference, shipment-status inference, direct logistics API call, polling, API call, persistence, external navigation, raw tracking URL, raw receipt URL, exposed payment-session ID, gateway ID, transaction ID, camera access, picker access, file input, forced sign-in, affiliate route, marketplace route, external-seller route, or sponsored route was introduced for Screen 24. Screen 25 is wired separately through `MoreHubScreen` Orders and reuses Screen 24 only for the explicit View order details path. The standalone regression suite lives at `components/order-details-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
 
 ## OrderHistoryScreen Integration
 
-`OrderHistoryScreen` is Screen 25, the first-party order-history destination now integrated into the demo Dashboard Orders route:
+`OrderHistoryScreen` is Screen 25, the first-party order-history destination integrated into the demo controller through `MoreHubScreen` Orders. Simplified `HomeDashboardScreen` no longer renders an Orders shortcut.
 
 ```text
-HomeDashboardScreen
+MoreHubScreen
 -> Orders
 -> OrderHistoryScreen
 
 OrderHistoryScreen
 -> Back
--> HomeDashboardScreen
+-> MoreHubScreen
 
 OrderHistoryScreen
 -> View order details
@@ -436,7 +620,7 @@ OrderHistoryScreen
 -> future-adapter log only
 ```
 
-Dashboard Orders is now enabled. Dashboard Recent-order details continues to route directly into `OrderDetailsScreen`; Screen 25 is the broader first-party order-list surface.
+`MoreHubScreen` is the visible Orders entry. Dashboard Recent-order details continues to route directly into `OrderDetailsScreen`; Screen 25 is the broader first-party order-list surface.
 
 The screen helps customers review which DermaLens orders exist, when a host says they were placed, which visible reference and status labels are supplied, what summary and total labels the host provided, and whether a detailed order view can be opened. It routes onward to the existing `OrderDetailsScreen` instead of duplicating detailed item, receipt, support, or shipping-update content.
 
@@ -444,6 +628,34 @@ The host owns the order list, received ordering, opaque order IDs, reference lab
 
 Order cards render in received host order. Malformed order-list entries degrade into neutral fallback cards with `Order reference unavailable` and `Status unavailable` without filtering or reordering. Duplicated usable-looking order IDs remain readable in place but disable trust-critical View-order actions, including forced activation guards. Empty order history is a neutral readable state, and offline status is informational while supplied order cards remain readable.
 
-The first order total uses the selected static Standard or Express Screen 24 receipt snapshot supplied by the demo controller: Standard remains `$93.50`, and Express remains `$102.50`. Load more is host-owned, has a distinct offline capability flag, and remains a future-adapter log only in the demo; Retry also remains a future-adapter log only. The screen and controller do not perform local pagination, mutate the list, calculate totals, calculate quantities, calculate counts, infer status, infer payment success, infer shipment state, sort, filter, group, rank, call logistics APIs, poll, fetch, persist order data, open external navigation, render raw tracking URLs, render raw receipt URLs, expose payment IDs, introduce host-adapter modules, create Screen 26, or add marketplace, affiliate, external-seller, or sponsored routes.
+The first order total uses the selected static Standard or Express Screen 24 receipt snapshot supplied by the demo controller: Standard remains `$93.50`, and Express remains `$102.50`. Load more is host-owned, has a distinct offline capability flag, and remains a future-adapter log only in the demo; Retry also remains a future-adapter log only. The screen and controller do not perform local pagination, mutate the list, calculate totals, calculate quantities, calculate counts, infer status, infer payment success, infer shipment state, sort, filter, group, rank, call logistics APIs, poll, fetch, persist order data, open external navigation, render raw tracking URLs, render raw receipt URLs, expose payment IDs, introduce host-adapter modules, create Screen 27, or add marketplace, affiliate, external-seller, or sponsored routes. Screen 26 now exists separately as `AccountAndOptionalSyncScreen` and is integrated from Profile management as documented below.
 
 Back, View order details, Load more, and Retry are explicit user-activated callbacks with pending labels, duplicate-activation protection, conflicting-action disabling, StrictMode-safe mounted tracking, and callback-rejection toasts. Repeated View-order controls keep concise visible labels, while accessible names add the visible order reference exactly once so enabled, pending, and blocked order actions remain contextual without duplicate reference announcements. The standalone regression suite lives at `components/order-history-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
+
+## AccountAndOptionalSyncScreen Integration
+
+`AccountAndOptionalSyncScreen` is Screen 26, a local-first account and optional sync settings surface now integrated into `app/page.tsx` from:
+
+```text
+ProfileSwitcherAndManagementScreen
+-> Manage sync settings
+-> AccountAndOptionalSyncScreen
+-> Back
+-> ProfileSwitcherAndManagementScreen
+```
+
+The demo Account-sync Back action returns to `ProfileSwitcherAndManagementScreen`, preserving the existing Profile-management source awareness for the next Back action. There is no direct Dashboard shortcut to Screen 26.
+
+The screen helps customers understand whether their DermaLens experience is local-only or connected to an optional account, which local profiles may be synced, which host-supplied consent and facial-data labels apply, and which explicit account, sync, consent, or facial-data requests can be made. Local profiles remain readable without account creation or sign-in.
+
+The host owns account status, account labels, ordered profile list, opaque profile IDs, display names, storage labels, sync action labels, consent labels, facial-data labels, account availability, per-profile sync availability, privacy-request availability, offline capability, persistence, authentication, account creation, account removal, sync transport, consent revocation, facial-data deletion, refreshed reports, and routing. Opaque profile IDs remain callback-only context and are never rendered directly.
+
+Malformed profile entries degrade into neutral fallback cards with `Unnamed profile` and `Storage state unavailable` without filtering or reordering. Duplicated usable-looking profile IDs remain readable but disable trust-critical sync and privacy-request actions, including forced activation guards. Explicit `state="empty"` overrides stale profile arrays for the profile-list region while keeping the account card readable, and ready reports with `profiles: []` render the same neutral empty profile state. Explicit Empty with missing or malformed required report context fails closed into Error rather than rendering a blank shell.
+
+The demo controller supplies a static host-shaped signed-out account fixture. Local profiles remain readable without an account, using the current controller-owned stable managed-profile display labels. Sign in, sign out, enable sync, disable sync, request consent revocation, request facial-data deletion, Back, and Retry are explicit user-activated callbacks with pending labels, duplicate-activation protection, conflicting-action disabling, StrictMode-safe mounted tracking, and callback-rejection toasts. In the route controller, Sign-in, Sign-out, Enable-sync, Disable-sync, Consent-revocation, Facial-data deletion, and Retry remain future-adapter logs only; known profile IDs are guarded, unknown IDs fail closed, and no local report mutation occurs. Sign-in, sign-out, sync, and privacy requests each use their distinct offline capability flags. Offline status is informational: supplied account and profile labels remain readable while host props decide which actions remain available.
+
+Consent revocation and facial-data deletion use an explicit confirmation dialog before invoking host callbacks. Each confirmation dialog exposes its visible title as the accessible dialog name, and the supporting copy is programmatically associated with the dialog. Opening the dialog does not revoke consent, delete data, remove a profile, or mutate local cards. A synchronous confirmation-open ref keeps rendered state and modal isolation aligned. Only one privacy confirmation candidate may exist at a time, so forced activation of another background privacy request cannot replace the current candidate.
+
+Confirmation revalidates the latest host-owned profile list and availability so removed, duplicated, newly blocked, malformed, offline-blocked, callback-withheld, or malformed refreshed-report candidates fail closed. The background shell remains `aria-hidden` and `inert` while the dialog is open, and Back, account, sync, and Retry callbacks also fail closed programmatically during that modal state. Privacy Confirm remains explicitly allowed. Malformed refreshed report context closes safely with the recovery toast and no host callback. Synchronous in-flight protection prevents immediate Cancel or Escape dismissal after Confirm begins. Successful privacy-request resolution closes the dialog, restores focus when possible, and relies on a refreshed host report for any visible changes. Rejected privacy-request callbacks show a recovery toast while keeping the dialog open for an explicit retry or Cancel.
+
+No browser history API, host-adapter module, shared component extraction, API call, authentication implementation, account creation, account deletion, automatic sync, local sync toggle, profile persistence, profile sync transport, consent mutation, facial-data deletion, local report mutation, local storage, session storage, IndexedDB, cookies, geolocation request, camera access, picker access, file input, external navigation, raw account URL, raw sync URL, payment identifier exposure, affiliate route, marketplace route, external-seller route, sponsored content, forced account creation, direct Dashboard shortcut, or Screen 27 was introduced. The standalone regression suite lives at `components/account-and-optional-sync-screen.test.tsx`, with route-controller coverage in `app/page.test.tsx`.
